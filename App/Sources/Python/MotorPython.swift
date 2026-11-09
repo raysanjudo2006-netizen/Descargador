@@ -183,12 +183,15 @@ final class MotorPython: AnalizadorVideo {
             return .failure(ErrorMotor(codigo: "interno", mensaje: "No se encontró Python dentro de la app", detalle: lib.path))
         }
         let stdlib = lib.appendingPathComponent(version, isDirectory: true)
-        let rutas = [
-            stdlib,
-            stdlib.appendingPathComponent("lib-dynload", isDirectory: true),
-            base.appendingPathComponent("app", isDirectory: true),
-            base.appendingPathComponent("app_packages", isDirectory: true),
-        ].map(\.path).joined(separator: "\n")
+        // Orden de sys.path: biblioteca estándar, código de la app, yt-dlp actualizado desde
+        // Ajustes (si lo hay) y, por último, los paquetes incluidos en la app.
+        let rutas = ([
+            stdlib.path,
+            stdlib.appendingPathComponent("lib-dynload", isDirectory: true).path,
+            base.appendingPathComponent("app", isDirectory: true).path,
+        ] + ActualizadorYtDlp.rutasActivas() + [
+            base.appendingPathComponent("app_packages", isDirectory: true).path,
+        ]).joined(separator: "\n")
 
         let capacidad = 1024
         var error = [CChar](repeating: 0, count: capacidad)

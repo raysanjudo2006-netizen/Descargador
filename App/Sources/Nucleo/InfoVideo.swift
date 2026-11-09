@@ -57,4 +57,11 @@ struct VersionesMotor: Decodable, Equatable {
     let python: String
     let ytDlp: String
     let ytDlpEjs: String?
+    /// Carpeta de donde se cargó yt-dlp (dentro de la app o la actualizada desde Ajustes).
+    let rutaYtDlp: String?
+
+    /// yt-dlp viene de una actualización instalada desde Ajustes.
+    var ytDlpActualizado: Bool {
+        rutaYtDlp?.contains("/Application Support/yt-dlp/") ?? false
+    }
 }
