@@ -1,0 +1,10 @@
+# Paquetes Python que se meten dentro de la app (solo wheels puros "py3-none-any").
+# Versiones fijadas según el extra "pin" de yt-dlp 2026.10.26.
+# Sin pycryptodomex ni brotli: son binarios y yt-dlp tiene alternativas en Python puro.
+yt-dlp==2026.10.26
+yt-dlp-ejs==0.8.0
+certifi==2026.10.23
+requests==2.34.2
+urllib3==2.8.0
+idna==3.20
+charset-normalizer==3.5.2
