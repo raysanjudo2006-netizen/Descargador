@@ -30,6 +30,15 @@ enum Apariencia: String, CaseIterable, Identifiable {
     }
 }
 
+/// Estado del análisis con yt-dlp.
+enum EstadoAnalisis: Equatable {
+    case inactivo
+    case analizando
+    case listo(InfoVideo)
+    /// Mensaje en español para el usuario.
+    case fallo(String)
+}
+
 /// Estado compartido por las pantallas: qué pestaña se ve y qué enlace se está analizando.
 @MainActor
 final class EstadoApp: ObservableObject {
@@ -40,6 +49,7 @@ final class EstadoApp: ObservableObject {
     @Published var textoEnlace: String = "" {
         didSet {
             guard textoEnlace != oldValue else { return }
+            cancelarAnalisis()
             enlaceAnalizado = nil
             mensajeError = nil
             calidadSolicitada = nil
@@ -55,11 +65,57 @@ final class EstadoApp: ObservableObject {
     /// Último enlace válido analizado.
     @Published private(set) var enlaceAnalizado: URL?
 
-    private let registro: Registro
+    /// Resultado del análisis con yt-dlp del enlace actual.
+    @Published private(set) var analisis: EstadoAnalisis = .inactivo
 
-    init(pestanaInicial: Pestana = .descargar, registro: Registro = .compartido) {
+    private let registro: Registro
+    private let analizador: AnalizadorVideo
+    private var tareaAnalisis: Task<Void, Never>?
+
+    init(pestanaInicial: Pestana = .descargar, registro: Registro = .compartido,
+         analizador: AnalizadorVideo = MotorPython.compartido) {
         self.pestana = pestanaInicial
         self.registro = registro
+        self.analizador = analizador
+    }
+
+    /// Vuelve a analizar el enlace actual (botón "Reintentar").
+    func reintentar() {
+        if let url = enlaceAnalizado {
+            iniciarAnalisis(url)
+        }
+    }
+
+    /// Espera a que termine el análisis en curso (para los tests).
+    func esperarAnalisis() async {
+        await tareaAnalisis?.value
+    }
+
+    private func iniciarAnalisis(_ url: URL) {
+        tareaAnalisis?.cancel()
+        analisis = .analizando
+        let analizador = self.analizador
+        tareaAnalisis = Task { [weak self] in
+            do {
+                let info = try await analizador.analizar(url)
+                // Si mientras tanto cambió el enlace, este resultado ya no sirve.
+                guard let self, !Task.isCancelled, self.enlaceAnalizado == url else { return }
+                self.analisis = .listo(info)
+                let disponibles = info.opciones.filter(\.disponible).count
+                self.registro.info("Analizado: \(info.titulo) (\(disponibles) calidades disponibles)", categoria: "ui")
+            } catch {
+                guard let self, !Task.isCancelled, self.enlaceAnalizado == url else { return }
+                let mensaje = (error as? ErrorMotor)?.mensajeUsuario
+                    ?? "No se pudo analizar el video: \(error.localizedDescription)"
+                self.analisis = .fallo(mensaje)
+            }
+        }
+    }
+
+    private func cancelarAnalisis() {
+        tareaAnalisis?.cancel()
+        tareaAnalisis = nil
+        analisis = .inactivo
     }
 
     /// Valida el texto del campo y, si contiene un enlace, lo deja listo para analizar.
@@ -89,12 +145,13 @@ final class EstadoApp: ObservableObject {
         }
     }
 
-    /// Deja un enlace ya validado como el actual, sin volver a pasarlo por el detector de enlaces.
+    /// Deja un enlace ya validado como el actual (sin volver a pasarlo por el detector) y lo analiza.
     private func aceptar(_ url: URL) {
         textoEnlace = url.absoluteString
         mensajeError = nil
         enlaceAnalizado = url
         registro.info("Enlace listo (\(Plataforma.detectar(url).nombre)): \(url.absoluteString)", categoria: "ui")
+        iniciarAnalisis(url)
     }
 
     /// Abre un enlace descargador://download?url=…[&calidad=…] (Share Extension, Atajos, Safari).

@@ -4,13 +4,14 @@ App de iOS para uso personal que descarga videos de YouTube, Instagram, TikTok, 
 directamente en el iPhone, sin servidor. Se compila gratis en GitHub Actions y se instala con
 SideStore (o AltStore) usando un Apple ID gratuito.
 
-> **Estado: Etapa 1 de 5.** La app ya se instala, detecta enlaces y plataformas, abre enlaces
-> `descargador://` y tiene Registro. La descarga real llega en las Etapas 2 y 3.
+> **Estado: Etapa 2 de 5.** La app lleva Python 3.14 y yt-dlp dentro: analiza un enlace y
+> muestra miniatura, título, duración y las calidades con su tamaño. La descarga llega en la
+> Etapa 3 y YouTube completo en la Etapa 4.
 
 | Etapa | Contenido | Estado |
 |---|---|---|
 | 1 | Esqueleto SwiftUI + compilación en GitHub Actions + pruebas en simulador | ✅ |
-| 2 | Python + yt-dlp dentro de la app | ⏳ |
+| 2 | Python + yt-dlp dentro de la app (analizar enlaces) | 🧪 en pruebas |
 | 3 | Descarga con progreso real, unión de audio y video, guardado en Fotos | ⏳ |
 | 4 | YouTube (motor JavaScript) | ⏳ |
 | 5 | Share Extension, Atajos, historial, ajustes completos | ⏳ |
@@ -95,7 +96,25 @@ Límites de un Apple ID gratuito (los pone Apple, no esta app):
 - Máximo **3 apps** instaladas así a la vez, **contando SideStore/AltStore**.
 - Máximo **10 App IDs por semana**. La Share Extension de la Etapa 5 gastará uno más.
 
-### SideStore (recomendado: renueva desde el propio iPhone)
+### Con iloader desde el PC (lo que funciona ahora)
+
+Desde el 12 de octubre de 2026, Apple rechaza el inicio de sesión de SideStore en el iPhone
+(error **-80045**) en todas las herramientas gratuitas. iloader, en cambio, sí inicia sesión desde
+el PC, así que de momento Descargador se instala y se renueva con él:
+
+1. Descarga `Descargador.ipa` en el PC (apartado 2).
+2. Conecta el iPhone por cable y desbloquéalo.
+3. En iloader pulsa **Import IPA**, elige `Descargador.ipa` y espera a que termine.
+4. La primera vez: **Ajustes › General › VPN y gestión de dispositivos** → tu Apple ID →
+   **Confiar**, y **Ajustes › Privacidad y seguridad › Modo de desarrollador** → activado.
+
+**Cada 7 días** (o al instalar una versión nueva) repite los pasos 2 y 3. No se pierden los datos.
+
+Si SideStore publica un arreglo del -80045, podrás volver a renovar desde el iPhone. Hay un
+arreglo no oficial con la versión *Nightly* y el servidor de anisette "SideStore (New)"; ver
+[SideStore #1709](https://github.com/SideStore/SideStore/issues/1709).
+
+### SideStore (renueva desde el propio iPhone cuando el inicio de sesión funcione)
 
 **Una sola vez, en el iPhone:**
 
@@ -219,18 +238,26 @@ dímelo.
 3. En **Ajustes › Acerca de** está la versión, el build y el commit; **Copiar información** lo
    copia todo junto.
 
-## 6. Etapa 1: qué probar y qué enviarme
+## 6. Qué probar en cada etapa y qué enviarme
 
-1. **Actions:** los dos trabajos con ✅. En **capturas-simulador** debe haber 12 imágenes
-   (pantallas en claro y oscuro, aviso del portapapeles y enlace `descargador://`).
-2. **Instalar:** el `.ipa` se instala con SideStore y la app abre con el icono naranja.
-3. **Pegar:** copia un enlace de YouTube en otra app y vuelve a Descargador. Debe aparecer
-   "Tienes un enlace copiado"; toca el icono de pegar y debe salir la tarjeta "YouTube".
-4. **Error:** escribe `hola` y pulsa **Analizar enlace**. Debe salir un aviso en rojo.
-5. **Esquema:** en Safari, abre
-   `descargador://download?url=https%3A%2F%2Fx.com%2Fu%2Fstatus%2F1&calidad=720`. Se abre la app
-   con "X" y "Calidad pedida: 720p".
-6. **Ajustes:** cambia el tema a Oscuro y a Claro.
+### Etapa 2 (actual): Python + yt-dlp
+
+1. **Actions:** los tres trabajos con ✅ (*Compilar*, *Probar en simulador* y *Tests de Python*).
+   En **capturas-simulador**, la de Ajustes debe mostrar yt-dlp `2026.10.26`.
+2. **Instalar:** crea la etiqueta `v0.2.0` (apartado 2) e instala el `.ipa` con iloader.
+   Ahora pesa más (unos 15-25 MB) porque lleva Python dentro.
+3. **Ajustes › Motor de descarga:** Python `3.14.10`, yt-dlp `2026.10.26`, yt-dlp-ejs `0.8.0`.
+   La primera vez tarda uno o dos segundos.
+4. **Analizar:** pega enlaces de **TikTok**, **X** e **Instagram** y pulsa **Analizar enlace**.
+   Deben salir miniatura, título, autor, duración y la lista de calidades con su tamaño.
+5. **YouTube:** puede funcionar a medias (sin algunas calidades) o dar un error: el motor
+   JavaScript que necesita llega en la Etapa 4. Pruébalo igualmente y mándame el resultado.
+6. **Error claro:** activa el modo avión y analiza un enlace: debe decir que no hay conexión.
+
+### Etapa 1: esqueleto ✅
+
+Pegar y detectar enlaces, aviso del portapapeles, enlace `descargador://`, tema claro/oscuro y
+Registro. Probado en el iPhone el 9 de noviembre de 2026.
 
 **Si algo falla, envíame:**
 

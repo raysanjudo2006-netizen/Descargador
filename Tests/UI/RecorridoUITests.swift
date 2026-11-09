@@ -35,6 +35,30 @@ final class RecorridoUITests: XCTestCase {
         app.descendants(matching: .any)[identificador]
     }
 
+    /// Espera (sin fallar) a que algún elemento cumpla el predicado; útil antes de una captura.
+    @discardableResult
+    private func esperar(_ app: XCUIApplication, _ formato: String, segundos: TimeInterval) -> Bool {
+        let consulta = app.descendants(matching: .any).matching(NSPredicate(format: formato))
+        let expectativa = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count > 0"), object: consulta)
+        return XCTWaiter().wait(for: [expectativa], timeout: segundos) == .completed
+    }
+
+    /// Espera a que un elemento (o sus textos) muestre `texto`. Comprueba en Swift y no con
+    /// NSPredicate porque `value` no siempre es una cadena.
+    @discardableResult
+    private func esperarTexto(_ elemento: XCUIElement, contiene texto: String, segundos: TimeInterval) -> Bool {
+        let limite = Date().addingTimeInterval(segundos)
+        while Date() < limite {
+            if elemento.exists {
+                var textos = [elemento.label, (elemento.value as? String) ?? ""]
+                textos += elemento.staticTexts.allElementsBoundByIndex.map(\.label)
+                if textos.contains(where: { $0.contains(texto) }) { return true }
+            }
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        return false
+    }
+
     // MARK: - Tests
 
     func test_recorridoConCapturas() {
@@ -48,6 +72,8 @@ final class RecorridoUITests: XCTestCase {
             capturar("02-historial-\(apariencia)")
 
             app.tabBars.buttons["Ajustes"].tap()
+            // La primera vez arranca Python: se espera a ver la versión de yt-dlp.
+            esperarTexto(elemento(app, "versionYtDlp"), contiene: "2026.", segundos: 30)
             capturar("03-ajustes-\(apariencia)")
 
             app.tabBars.buttons["Registro"].tap()
@@ -62,10 +88,19 @@ final class RecorridoUITests: XCTestCase {
             let etiqueta = app.staticTexts["etiquetaPlataforma"]
             XCTAssertTrue(etiqueta.waitForExistence(timeout: 5))
             XCTAssertEqual(etiqueta.label, "YouTube")
+            // El análisis usa la red del Mac de GitHub; puede salir bien o con error: se captura igual.
+            esperar(app, "identifier IN {'tituloVideo', 'falloAnalisis'}", segundos: 60)
             capturar("05-analizado-\(apariencia)")
 
             app.terminate()
         }
+    }
+
+    func test_ajustesMuestraVersionesDelMotor() {
+        let app = lanzar(["-pestanaInicial", "ajustes"] + sinAvisoPortapapeles)
+        XCTAssertTrue(elemento(app, "versionYtDlp").waitForExistence(timeout: 15))
+        XCTAssertTrue(esperarTexto(elemento(app, "versionYtDlp"), contiene: "2026.10.26", segundos: 60),
+                      "Ajustes debería mostrar yt-dlp 2026.10.26 (Python embebido funcionando)")
     }
 
     func test_enlaceInvalidoMuestraError() {

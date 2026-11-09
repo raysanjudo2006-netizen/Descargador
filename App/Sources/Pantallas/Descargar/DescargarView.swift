@@ -48,12 +48,13 @@ struct DescargarView: View {
                 if let url = estado.enlaceAnalizado {
                     Section("Video") {
                         TarjetaEnlace(url: url)
+                        resultadoAnalisis
                         if let calidad = estado.calidadSolicitada {
                             LabeledContent("Calidad pedida", value: calidad.titulo)
                         }
-                        Text("En la Etapa 2 aquí aparecerán la miniatura, la duración y los botones de calidad con su tamaño.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    }
+                    if case .listo(let info) = estado.analisis {
+                        ListaCalidades(info: info, calidadPedida: estado.calidadSolicitada)
                     }
                 }
             }
@@ -61,6 +62,7 @@ struct DescargarView: View {
             .navigationTitle("Descargar")
             .animation(.default, value: hayEnlaceCopiado)
             .animation(.default, value: estado.enlaceAnalizado)
+            .animation(.default, value: estado.analisis)
         }
         .onAppear(perform: comprobarPortapapeles)
         .onChange(of: fase) { nueva in
@@ -69,6 +71,33 @@ struct DescargarView: View {
     }
 
     // MARK: - Secciones
+
+    /// Fila según el estado del análisis con yt-dlp.
+    @ViewBuilder
+    private var resultadoAnalisis: some View {
+        switch estado.analisis {
+        case .inactivo:
+            EmptyView()
+        case .analizando:
+            HStack(spacing: 12) {
+                ProgressView()
+                Text("Analizando con yt-dlp…")
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("analizando")
+        case .listo(let info):
+            TarjetaVideo(info: info)
+        case .fallo(let mensaje):
+            VStack(alignment: .leading, spacing: 8) {
+                Label(mensaje, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                Button("Reintentar") { estado.reintentar() }
+                    .buttonStyle(.borderless)
+            }
+            .accessibilityIdentifier("falloAnalisis")
+        }
+    }
 
     private var seccionEnlace: some View {
         Section {
