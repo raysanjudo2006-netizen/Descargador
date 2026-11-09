@@ -80,8 +80,9 @@ Para la siguiente versión usa otro número (`v0.1.1`, `v0.2.0`…).
 
 1. **Actions** → la última ejecución de **Compilar** (con ✅).
 2. Abajo del todo, en **Artifacts**, descarga `Descargador-ipa-N` (es un `.zip`).
-3. Descomprímelo: dentro está `Descargador.ipa`. Para pasarlo al iPhone sin Mac lo más fácil es
-   subirlo a iCloud Drive desde <https://www.icloud.com> o usar la Opción A.
+3. Descomprímelo: dentro está `Descargador.ipa`. Para llevarlo al iPhone sin Mac, lo más fácil
+   es la Opción A: GitHub funciona desde Cuba, mientras que iCloud u otros servicios pueden no
+   cargar.
 
 En la misma página está **capturas-simulador**: imágenes de la app funcionando en un iPhone
 simulado, para ver cómo queda cada cambio antes de instalarlo.
@@ -201,6 +202,15 @@ Prueba rápida sin atajo: escribe en la barra de Safari
 | Límite de apps o de App IDs | Borra una app instalada con SideStore, o espera a que pasen 7 días desde que se crearon los IDs. |
 | No acepta tu Apple ID | Revisa mayúsculas y minúsculas; actualiza SideStore con iloader. |
 | "No se puede verificar la app" o no abre | Ha caducado: renuévala en SideStore → Actualizar todo. |
+
+**Desde Cuba**
+
+GitHub (repositorio público, Actions y Releases) está disponible para desarrolladores en Cuba
+según su política de exportación. Algunos servicios de Apple o de Microsoft pueden no cargar
+desde una conexión cubana: la descarga de iTunes, la Microsoft Store, la App Store (para
+LocalDevVPN) o el inicio de sesión del Apple ID en iloader, SideStore o AltServer. Si un paso
+falla así, el problema es la conexión con ese servicio, no esta app. Anota en qué paso ocurre y
+dímelo.
 
 **La app se cierra o algo va mal**
 
