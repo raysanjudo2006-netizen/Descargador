@@ -4,17 +4,18 @@ App de iOS para uso personal que descarga videos de YouTube, Instagram, TikTok, 
 directamente en el iPhone, sin servidor. Se compila gratis en GitHub Actions y se instala con
 SideStore (o AltStore) usando un Apple ID gratuito.
 
-> **Estado: Etapa 2 de 5.** La app lleva Python 3.14 y yt-dlp dentro: analiza un enlace y
-> muestra miniatura, título, duración y las calidades con su tamaño. La descarga llega en la
-> Etapa 3 y YouTube completo en la Etapa 4.
+> **Estado: Etapa 3 de 5.** La app analiza el enlace con yt-dlp (Python dentro de la app),
+> descarga con progreso real, une audio y video sin ffmpeg y guarda el video en Fotos o el audio
+> en Archivos. yt-dlp se actualiza desde Ajustes sin reinstalar. YouTube completo llega en la
+> Etapa 4.
 
 | Etapa | Contenido | Estado |
 |---|---|---|
 | 1 | Esqueleto SwiftUI + compilación en GitHub Actions + pruebas en simulador | ✅ |
-| 2 | Python + yt-dlp dentro de la app (analizar enlaces) | 🧪 en pruebas |
-| 3 | Descarga con progreso real, unión de audio y video, guardado en Fotos | ⏳ |
+| 2 | Python + yt-dlp dentro de la app (analizar enlaces) | ✅ |
+| 3 | Descarga con progreso real, unión de audio y video, Fotos/Archivos, actualizar yt-dlp | 🧪 en pruebas |
 | 4 | YouTube (motor JavaScript) | ⏳ |
-| 5 | Share Extension, Atajos, historial, ajustes completos | ⏳ |
+| 5 | Share Extension, acción de Atajos, historial | ⏳ |
 
 ---
 
@@ -189,7 +190,7 @@ Compartir:
    1. **Codificar URL** (*URL Encode*) → entrada: *Entrada del atajo*.
    2. **Texto** → escribe `descargador://download?url=` y, justo detrás, inserta la variable
       *Texto codificado*. Opcional: añade `&calidad=720` al final (valores: `mejor`, `1080`,
-      `720`, `480`, `360`, `audio`).
+      `720`, `480`, `360`, `audio`): con calidad, la descarga empieza sola al terminar el análisis.
    3. **Abrir URLs** → con el *Texto* anterior.
 4. Pruébalo: en YouTube o TikTok pulsa **Compartir › Descargar video**.
 
@@ -240,7 +241,34 @@ dímelo.
 
 ## 6. Qué probar en cada etapa y qué enviarme
 
-### Etapa 2 (actual): Python + yt-dlp
+### Etapa 3 (actual): descargar, unir y guardar
+
+1. **Instalar:** etiqueta `v0.3.0` (apartado 2) e instálalo con iloader.
+2. **Descargar video:** analiza un enlace de TikTok, X o Instagram y **toca una calidad**. Debe
+   verse la barra con %, MB descargados de MB totales, velocidad y tiempo restante. Si video y
+   audio vienen separados, después sale **"Uniendo audio y video"**.
+3. **Resultado:** "Guardado en Fotos y en Archivos". La primera vez iOS pide permiso para añadir
+   a Fotos. Comprueba en **Fotos** que el video tiene sonido. Prueba **Compartir** y **Abrir**.
+4. **Solo audio:** toca "Solo audio". El `.m4a` queda en **Archivos › En mi iPhone ›
+   Descargador › Descargas**.
+5. **Cancelar:** empieza una descarga grande y pulsa **Cancelar descarga**.
+6. **Segundo plano:** empieza una descarga larga y sal de la app.
+   - Sin "Mantener activo": a los ~30 s llega el aviso "Descarga en pausa"; al volver, continúa.
+   - Con **Ajustes › Mantener activo en segundo plano**: sigue descargando fuera de la app.
+7. **Actualizar yt-dlp:** Ajustes › **Buscar actualización de yt-dlp**. Si hay una nueva,
+   **Instalar**, cierra la app y ábrela: debe decir "(actualizado)". "Volver al yt-dlp incluido"
+   lo deshace.
+8. **Atajo con calidad:** en Safari abre
+   `descargador://download?url=https%3A%2F%2Fx.com%2FNASA%2Fstatus%2F1&calidad=360` (cambia la
+   URL por un tuit con video): debe analizar y descargar solo.
+
+### Etapa 2: Python + yt-dlp ✅
+
+Compilación y pruebas en el simulador en verde (Python 3.14.10, yt-dlp 2026.10.26).
+
+<details>
+<summary>Pruebas de la Etapa 2</summary>
+
 
 1. **Actions:** los tres trabajos con ✅ (*Compilar*, *Probar en simulador* y *Tests de Python*).
    En **capturas-simulador**, la de Ajustes debe mostrar yt-dlp `2026.10.26`.
@@ -253,6 +281,8 @@ dímelo.
 5. **YouTube:** puede funcionar a medias (sin algunas calidades) o dar un error: el motor
    JavaScript que necesita llega en la Etapa 4. Pruébalo igualmente y mándame el resultado.
 6. **Error claro:** activa el modo avión y analiza un enlace: debe decir que no hay conexión.
+
+</details>
 
 ### Etapa 1: esqueleto ✅
 
