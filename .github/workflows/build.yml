@@ -1,0 +1,73 @@
+# Compila Descargador en un Mac de GitHub (gratis en repositorios públicos).
+#
+#  - compilar:  genera Descargador.ipa SIN FIRMAR (artifact) y, en tags v*, lo publica en Releases.
+#
+# Si algo falla, abre la ejecución y mira primero la pestaña "Summary": ahí aparecen
+# los errores resumidos. El log completo se sube como artifact.
+name: Compilar
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+# Si haces dos push seguidos, se cancela la ejecución anterior de la misma rama.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # necesario solo para publicar Releases en tags v*
+
+env:
+  XCODEGEN_VERSION: "2.46.0"
+
+jobs:
+  compilar:
+    name: Compilar .ipa (iPhone)
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      XCODE_VERSION: "26.6"
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v7
+
+      - name: Preparar herramientas (XcodeGen, xcbeautify, Xcode)
+        run: bash scripts/ci/instalar_herramientas.sh
+
+      - name: Generar proyecto con XcodeGen
+        run: xcodegen generate
+
+      - name: Compilar y empaquetar .ipa
+        run: bash scripts/ci/compilar_ipa.sh
+
+      - name: Subir .ipa
+        uses: actions/upload-artifact@v7
+        with:
+          name: Descargador-ipa-${{ github.run_number }}
+          path: build/Descargador.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Subir log de compilación (solo si falla)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: log-compilacion
+          path: build/logs/
+          if-no-files-found: ignore
+
+      - name: Publicar en Releases (solo en tags v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" build/Descargador.ipa --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" build/Descargador.ipa \
+              --title "Descargador $GITHUB_REF_NAME" --generate-notes
+          fi

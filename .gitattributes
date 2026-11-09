@@ -1,0 +1,4 @@
+# Normaliza finales de línea: el runner macOS necesita LF en los scripts.
+* text=auto eol=lf
+*.png binary
+*.jpg binary

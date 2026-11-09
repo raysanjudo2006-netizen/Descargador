@@ -1,0 +1,19 @@
+# Generados por XcodeGen (se regeneran en CI con `xcodegen generate`)
+*.xcodeproj/
+*.xcworkspace/
+App/Info.plist
+
+# Compilación
+build/
+DerivedData/
+*.ipa
+
+# Python embebido y paquetes (se descargan en CI desde la Etapa 2)
+Python.xcframework/
+App/python/app_packages/
+
+# Sistema
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc

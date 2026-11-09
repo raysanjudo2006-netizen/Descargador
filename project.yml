@@ -1,0 +1,75 @@
+# Definición del proyecto para XcodeGen (https://github.com/yonaskolb/XcodeGen).
+# El .xcodeproj NO se guarda en git: GitHub Actions lo genera con `xcodegen generate`.
+name: Descargador
+
+options:
+  bundleIdPrefix: com.personal
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: es
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Commit corto; GitHub Actions lo sobrescribe al compilar.
+    GIT_COMMIT: local
+    # Solo iPhone.
+    TARGETED_DEVICE_FAMILY: "1"
+    # Sin equipo de desarrollo: firma ad hoc en simulador; el .ipa se compila sin firmar
+    # y SideStore/AltStore lo firma con tu Apple ID al instalarlo.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    # Los scripts de fase de compilación (Etapa 2: Python) necesitan acceso al disco.
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+targets:
+  Descargador:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/Sources
+      - path: App/Resources
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Descargador
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: es
+        DescargadorCommit: $(GIT_COMMIT)
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIApplicationSupportsIndirectInputEvents: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Esquema descargador://download?url=...
+        CFBundleURLTypes:
+          - CFBundleURLName: com.personal.descargador
+            CFBundleURLSchemes:
+              - descargador
+        # Muestra la carpeta Documents de la app en la app Archivos.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.personal.descargador
+        PRODUCT_NAME: Descargador
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+schemes:
+  Descargador:
+    build:
+      targets:
+        Descargador: all
+    run:
+      config: Debug
+    archive:
+      config: Release
