@@ -33,6 +33,16 @@ targets:
     sources:
       - path: App/Sources
       - path: App/Resources
+    # Python para iOS (BeeWare). Lo descarga scripts/ci/preparar_python.sh; no está en git.
+    dependencies:
+      - framework: Python.xcframework
+        embed: true
+    # Mete la biblioteca estándar, yt-dlp y App/python dentro de la app (ver el script).
+    postBuildScripts:
+      - name: Instalar Python
+        script: bash "$PROJECT_DIR/scripts/instalar_python_en_app.sh"
+        basedOnDependencyAnalysis: false
+        showEnvVars: false
     info:
       path: App/Info.plist
       properties:
@@ -63,6 +73,10 @@ targets:
         PRODUCT_NAME: Descargador
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # Puente en C hacia Python (App/Sources/Python).
+        SWIFT_OBJC_BRIDGING_HEADER: App/Sources/Python/Descargador-Bridging-Header.h
+        # Las cabeceras de Python usan #include "…" dentro del framework: no es un error.
+        CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER: NO
 
   # Tests unitarios de la lógica (se ejecutan en el simulador de GitHub Actions).
   DescargadorTests:

@@ -2,6 +2,7 @@
 #
 #  - compilar:  genera Descargador.ipa SIN FIRMAR (artifact) y, en tags v*, lo publica en Releases.
 #  - simulador: ejecuta los tests en un iPhone simulado con iOS 18 y sube capturas de cada pantalla.
+#  - python:    tests del código Python de la app (rápido, en Linux).
 #
 # Si algo falla, abre la ejecución y mira primero la pestaña "Summary": ahí aparecen
 # los errores resumidos. El log completo se sube como artifact.
@@ -41,6 +42,14 @@ jobs:
 
       - name: Preparar herramientas (XcodeGen, xcbeautify, Xcode)
         run: bash scripts/ci/instalar_herramientas.sh
+
+      - name: Instalar Python 3.14 en el runner
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Preparar Python para iOS (BeeWare + yt-dlp)
+        run: bash scripts/ci/preparar_python.sh
 
       - name: Generar proyecto con XcodeGen
         run: xcodegen generate
@@ -89,6 +98,14 @@ jobs:
       - name: Preparar herramientas (XcodeGen, xcbeautify, Xcode)
         run: bash scripts/ci/instalar_herramientas.sh
 
+      - name: Instalar Python 3.14 en el runner
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Preparar Python para iOS (BeeWare + yt-dlp)
+        run: bash scripts/ci/preparar_python.sh
+
       - name: Generar proyecto con XcodeGen
         run: xcodegen generate
 
@@ -113,3 +130,22 @@ jobs:
             build/Resultados.xcresult
             build/logs/
           if-no-files-found: ignore
+
+  python:
+    name: Tests de Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v7
+
+      - name: Instalar Python 3.14
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Instalar yt-dlp y dependencias
+        run: python -m pip install --quiet --disable-pip-version-check -r python/requisitos-ios.txt
+
+      - name: Ejecutar tests
+        run: python scripts/probar_python.py
