@@ -35,12 +35,14 @@ enum Apariencia: String, CaseIterable, Identifiable {
 final class EstadoApp: ObservableObject {
     @Published var pestana: Pestana
 
-    /// Texto del campo de enlace. Al editarlo se descarta el resultado anterior.
+    /// Texto del campo de enlace. Al editarlo se descarta el resultado anterior
+    /// (y la calidad que viniera de Atajos: ya no corresponde a este enlace).
     @Published var textoEnlace: String = "" {
         didSet {
             guard textoEnlace != oldValue else { return }
             enlaceAnalizado = nil
             mensajeError = nil
+            calidadSolicitada = nil
         }
     }
 
@@ -74,21 +76,25 @@ final class EstadoApp: ObservableObject {
             registro.aviso("Texto sin enlace válido: \"\(texto.prefix(80))\"", categoria: "ui")
             return
         }
-        textoEnlace = url.absoluteString
-        mensajeError = nil
-        enlaceAnalizado = url
-        registro.info("Enlace listo (\(Plataforma.detectar(url).nombre)): \(url.absoluteString)", categoria: "ui")
+        aceptar(url)
     }
 
     /// Usa lo que el usuario pegó: extrae el primer enlace (TikTok pega texto alrededor) y lo analiza.
     func usarTextoPegado(_ texto: String) {
-        calidadSolicitada = nil
         if let url = Enlaces.extraerPrimerEnlace(de: texto) {
-            textoEnlace = url.absoluteString
+            aceptar(url)
         } else {
             textoEnlace = texto.trimmingCharacters(in: .whitespacesAndNewlines)
+            analizar()
         }
-        analizar()
+    }
+
+    /// Deja un enlace ya validado como el actual, sin volver a pasarlo por el detector de enlaces.
+    private func aceptar(_ url: URL) {
+        textoEnlace = url.absoluteString
+        mensajeError = nil
+        enlaceAnalizado = url
+        registro.info("Enlace listo (\(Plataforma.detectar(url).nombre)): \(url.absoluteString)", categoria: "ui")
     }
 
     /// Abre un enlace descargador://download?url=…[&calidad=…] (Share Extension, Atajos, Safari).
@@ -105,8 +111,8 @@ final class EstadoApp: ObservableObject {
             "Recibido por descargador://: \(peticion.url.absoluteString) (calidad: \(peticion.calidad?.titulo ?? "sin indicar"))",
             categoria: "esquema")
         pestana = .descargar
-        textoEnlace = peticion.url.absoluteString
+        aceptar(peticion.url)
+        // Después de aceptar: cambiar el texto borra la calidad anterior.
         calidadSolicitada = peticion.calidad
-        analizar()
     }
 }

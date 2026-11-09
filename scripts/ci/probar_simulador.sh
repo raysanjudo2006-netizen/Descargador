@@ -38,8 +38,10 @@ set -e
 echo "::endgroup::"
 
 echo "::group::Exportar capturas"
+mkdir -p build/capturas
 python3 scripts/ci/exportar_capturas.py "$RESULTADOS" build/capturas || true
-NUM_CAPTURAS=$(find build/capturas -name '*.png' 2>/dev/null | wc -l | tr -d ' ')
+# Sin "set -e" aquí no se pierde el resumen de errores si algo de esto falla.
+NUM_CAPTURAS=$( (find build/capturas -name '*.png' || true) | wc -l | tr -d ' ')
 echo "::endgroup::"
 
 if [[ $estado -ne 0 ]]; then

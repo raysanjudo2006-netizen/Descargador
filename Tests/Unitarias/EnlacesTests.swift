@@ -68,6 +68,17 @@ final class EnlacesTests: XCTestCase {
         XCTAssertEqual(p?.url.absoluteString, "https://a.com/b%20c")
     }
 
+    func test_peticionSinCodificarConservaFragmento() {
+        let p = peticion("descargador://download?url=https://example.com/v#t=30")
+        XCTAssertEqual(p?.url.absoluteString, "https://example.com/v#t=30")
+    }
+
+    func test_peticionCodificadaIgnoraOtrosParametros() {
+        let p = peticion("descargador://download?url=https%3A%2F%2Fa.com%2Fv&origen=atajos&calidad=360")
+        XCTAssertEqual(p?.url.absoluteString, "https://a.com/v")
+        XCTAssertEqual(p?.calidad, .p360)
+    }
+
     func test_peticionConCalidadDesconocida() {
         let p = peticion("descargador://download?url=https://a.com/v&calidad=4k")
         XCTAssertEqual(p?.url.absoluteString, "https://a.com/v")

@@ -46,6 +46,22 @@ final class EstadoAppTests: XCTestCase {
         XCTAssertTrue(registro.entradas.contains { $0.nivel == .aviso })
     }
 
+    func test_editarTextoBorraCalidadPedida() throws {
+        let (estado, _) = nuevoEstado()
+        estado.abrir(enlaceProfundo: try XCTUnwrap(URL(string: "descargador://download?url=https://youtu.be/abc&calidad=720")))
+        XCTAssertEqual(estado.calidadSolicitada, .p720)
+        estado.textoEnlace = "https://x.com/u/status/9"
+        estado.analizar()
+        XCTAssertNil(estado.calidadSolicitada, "La calidad de Atajos no debe pasar a otro enlace escrito a mano")
+    }
+
+    func test_enlaceProfundoNoPasaPorElDetector() throws {
+        // NSDataDetector recortaría el ")" final; el enlace ya validado debe llegar intacto.
+        let (estado, _) = nuevoEstado()
+        estado.abrir(enlaceProfundo: try XCTUnwrap(URL(string: "descargador://download?url=https://es.wikipedia.org/wiki/Hola_(saludo)")))
+        XCTAssertEqual(estado.enlaceAnalizado?.absoluteString, "https://es.wikipedia.org/wiki/Hola_(saludo)")
+    }
+
     func test_editarTextoBorraResultadoAnterior() {
         let (estado, _) = nuevoEstado()
         estado.usarTextoPegado("https://x.com/u/status/1")

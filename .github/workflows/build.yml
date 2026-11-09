@@ -19,8 +19,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Por defecto, solo lectura. El job "compilar" pide escritura para publicar Releases.
 permissions:
-  contents: write # necesario solo para publicar Releases en tags v*
+  contents: read
 
 env:
   XCODEGEN_VERSION: "2.46.0"
@@ -30,6 +31,8 @@ jobs:
     name: Compilar .ipa (iPhone)
     runs-on: macos-26
     timeout-minutes: 30
+    permissions:
+      contents: write # necesario solo para publicar Releases en tags v*
     env:
       XCODE_VERSION: "26.6"
     steps:

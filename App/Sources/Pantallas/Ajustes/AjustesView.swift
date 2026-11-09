@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// Ajustes de la app. En esta etapa: apariencia y datos de la compilación.
 struct AjustesView: View {
@@ -34,8 +33,9 @@ struct AjustesView: View {
                     LabeledContent("Sistema", value: InfoBuild.sistema)
                     LabeledContent("Modelo", value: InfoBuild.modelo)
                     Button {
-                        UIPasteboard.general.string = InfoBuild.resumen
+                        Portapapeles.copiar(InfoBuild.resumen)
                         copiado = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiado = false }
                     } label: {
                         Label(copiado ? "Copiado" : "Copiar información",
                               systemImage: copiado ? "checkmark" : "doc.on.doc")

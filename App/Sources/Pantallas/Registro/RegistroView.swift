@@ -37,7 +37,8 @@ struct RegistroView: View {
             .listStyle(.plain)
             .accessibilityIdentifier("listaRegistro")
             .onAppear { irAlFinal(proxy) }
-            .onChange(of: registro.entradas.count) { _ in irAlFinal(proxy) }
+            // Por id y no por número: al llegar al máximo, el número de entradas deja de cambiar.
+            .onChange(of: registro.entradas.last?.id) { _ in irAlFinal(proxy) }
         }
     }
 
@@ -45,7 +46,7 @@ struct RegistroView: View {
     private var barra: some ToolbarContent {
         ToolbarItemGroup(placement: .navigationBarTrailing) {
             Button {
-                UIPasteboard.general.string = registro.textoCompleto()
+                Portapapeles.copiar(registro.textoCompleto())
                 copiado = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiado = false }
             } label: {
@@ -54,7 +55,8 @@ struct RegistroView: View {
             .disabled(registro.entradas.isEmpty)
             .accessibilityIdentifier("botonCopiarRegistro")
 
-            ShareLink(item: registro.textoCompleto()) {
+            ShareLink(item: TextoRegistro(entradas: registro.entradas),
+                      preview: SharePreview("Registro de Descargador")) {
                 Label("Compartir", systemImage: "square.and.arrow.up")
             }
             .disabled(registro.entradas.isEmpty)
@@ -72,6 +74,18 @@ struct RegistroView: View {
         if let ultima = registro.entradas.last {
             proxy.scrollTo(ultima.id, anchor: .bottom)
         }
+    }
+}
+
+/// Lo que se comparte: una copia de las entradas (barata) cuyo texto solo se genera
+/// cuando el usuario comparte, no cada vez que la pantalla se redibuja.
+private struct TextoRegistro: Transferable {
+    let entradas: [EntradaRegistro]
+
+    static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(exporting: { (registro: TextoRegistro) in
+            Registro.texto(de: registro.entradas)
+        })
     }
 }
 

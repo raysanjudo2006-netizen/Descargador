@@ -62,24 +62,33 @@ enum Enlaces {
             return nil
         }
         var valor = String(consulta[inicioValor...])
-
-        // 2. La calidad puede ir antes de "url=" o al final (se parte en la ÚLTIMA aparición).
         var calidad = calidadEn(parametros: previo)
-        if let r = valor.range(of: "&calidad=", options: .backwards) {
-            calidad = calidadEn(parametros: valor[r.lowerBound...].dropFirst())
-            valor = String(valor[..<r.lowerBound])
-        }
 
-        // 3. Si ya empieza por http(s):// viene sin codificar y se usa tal cual
-        //    (decodificarla estropearía porcentajes propios como "%20").
         let minusculas = valor.lowercased()
         let texto: String
         if minusculas.hasPrefix("http://") || minusculas.hasPrefix("https://") {
+            // 2a. Sin codificar: puede traer sus propios "&", así que solo se separa la calidad
+            //     en su ÚLTIMA aparición. Se usa tal cual (decodificarla estropearía "%20" propios)
+            //     y se le devuelve el fragmento "#…", que URL asigna al enlace exterior.
+            if let r = valor.range(of: "&calidad=", options: .backwards) {
+                calidad = calidadEn(parametros: valor[r.lowerBound...].dropFirst()) ?? calidad
+                valor = String(valor[..<r.lowerBound])
+            }
+            if let fragmento = enlace.fragment, !fragmento.isEmpty {
+                valor += "#" + fragmento
+            }
             texto = valor
-        } else if let decodificado = valor.removingPercentEncoding {
-            texto = decodificado
         } else {
-            return nil
+            // 2b. Codificada: no contiene "&" propios, así que termina en el primer "&";
+            //     el resto son otros parámetros (calidad u otros que se ignoran).
+            let partes = valor.split(separator: "&", maxSplits: 1, omittingEmptySubsequences: false)
+            if partes.count == 2 {
+                calidad = calidadEn(parametros: partes[1]) ?? calidad
+            }
+            guard let primera = partes.first, let decodificado = String(primera).removingPercentEncoding else {
+                return nil
+            }
+            texto = decodificado
         }
 
         guard let url = URL(string: texto), esWeb(url) else { return nil }

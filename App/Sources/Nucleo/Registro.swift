@@ -152,6 +152,11 @@ final class Registro: ObservableObject {
 
     /// Texto completo para copiar o compartir: cabecera con build y dispositivo + todas las líneas.
     func textoCompleto() -> String {
+        Self.texto(de: entradas)
+    }
+
+    /// Formatea una lista de entradas con la cabecera. Seguro fuera del hilo principal.
+    static func texto(de entradas: [EntradaRegistro]) -> String {
         var lineas = [
             "=== Registro de \(InfoBuild.resumen) ===",
             "Copiado: \(EntradaRegistro.textoFecha(Date()))",

@@ -117,19 +117,11 @@ struct DescargarView: View {
 
     // MARK: - Portapapeles
 
-    /// Clave en UserDefaults con el último `changeCount` ya ofrecido (los UI tests la fijan al lanzar).
-    private static let claveUltimoCambio = "ultimoCambioPortapapeles"
-
-    private var ultimoCambioVisto: Int {
-        let defaults = UserDefaults.standard
-        return defaults.object(forKey: Self.claveUltimoCambio) == nil ? -1 : defaults.integer(forKey: Self.claveUltimoCambio)
-    }
-
     /// Mira si hay un enlace copiado SIN leerlo (no salta el aviso de "pegar desde otra app").
     private func comprobarPortapapeles() {
         let portapapeles = UIPasteboard.general
         let cambio = portapapeles.changeCount
-        guard cambio != ultimoCambioVisto, portapapeles.hasStrings || portapapeles.hasURLs else {
+        guard cambio != Portapapeles.ultimoCambioVisto, portapapeles.hasStrings || portapapeles.hasURLs else {
             hayEnlaceCopiado = false
             return
         }
@@ -144,8 +136,7 @@ struct DescargarView: View {
 
     /// No volver a ofrecer el contenido actual del portapapeles.
     private func marcarPortapapelesVisto() {
-        let cambio = hayEnlaceCopiado ? cambioDetectado : UIPasteboard.general.changeCount
-        UserDefaults.standard.set(cambio, forKey: Self.claveUltimoCambio)
+        Portapapeles.marcarVisto(hayEnlaceCopiado ? cambioDetectado : UIPasteboard.general.changeCount)
         hayEnlaceCopiado = false
     }
 }
