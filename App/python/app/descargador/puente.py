@@ -9,12 +9,16 @@ Swift (a través de PuentePython.c) llama a estas funciones con tres argumentos:
 """
 from __future__ import annotations
 
+import copy
 import ctypes
 import functools
 import json
 import os
 import platform
+import re
+import time
 import traceback
+import zipfile
 
 from . import errores, seleccion
 
@@ -77,6 +81,23 @@ def _respuesta_error(codigo: str, mensaje: str, detalle: str | None = None) -> s
                       ensure_ascii=False)
 
 
+def _es_cancelacion(exc) -> bool:
+    """True si la excepción (o una que lleve dentro) es DownloadCancelled de yt-dlp."""
+    pendientes, vistos = [exc], set()
+    while pendientes:
+        actual = pendientes.pop()
+        if actual is None or id(actual) in vistos:
+            continue
+        vistos.add(id(actual))
+        if any(clase.__name__ == "DownloadCancelled" for clase in type(actual).__mro__):
+            return True
+        info = getattr(actual, "exc_info", None)
+        if isinstance(info, tuple) and len(info) > 1:
+            pendientes.append(info[1])
+        pendientes += [actual.__cause__, actual.__context__]
+    return False
+
+
 def _expuesta(funcion):
     """Convierte una función (peticion: dict, emisor) -> datos en una función del puente.
 
@@ -92,6 +113,9 @@ def _expuesta(funcion):
         try:
             return _respuesta_ok(funcion(peticion, emisor))
         except Exception as exc:
+            if _es_cancelacion(exc):
+                emisor.log("info", f"{funcion.__name__}: cancelado por el usuario")
+                return _respuesta_error("cancelado", "Cancelado por el usuario")
             mensaje = str(exc).removeprefix("ERROR: ").strip()
             detalle = "".join(traceback.format_exception(exc))
             # Solo los errores de yt-dlp se clasifican por su texto; el resto es un fallo nuestro.
@@ -126,6 +150,34 @@ def _miniatura(info: dict):
     return miniaturas[-1]["url"] if miniaturas else None
 
 
+def _opciones_comunes(peticion: dict, registro: _RegistroYtDlp) -> dict:
+    """Opciones de YoutubeDL compartidas por info y descargar."""
+    return {
+        "logger": registro,
+        "quiet": True,
+        "noprogress": True,
+        "noplaylist": True,
+        "socket_timeout": 20,
+        "extractor_retries": 2,
+        "cachedir": peticion.get("cache") or False,
+        # Solo para los tests (archivos locales); nunca desde la interfaz.
+        "enable_file_urls": bool(peticion.get("permitir_archivos")),
+    }
+
+
+def _primera_entrada(datos: dict, registro: _RegistroYtDlp) -> dict:
+    """Si el enlace es una publicación con varios videos (Instagram), usa el primero."""
+    if datos.get("_type") != "playlist":
+        return datos
+    import yt_dlp
+    entradas = [e for e in datos.get("entries") or [] if e]
+    if not entradas:
+        raise yt_dlp.utils.DownloadError("Unsupported URL: la publicación no contiene videos")
+    if len(entradas) > 1:
+        registro.avisos.append(f"La publicación tiene {len(entradas)} videos; se usa el primero.")
+    return entradas[0]
+
+
 @_expuesta
 def info(peticion: dict, emisor: Emisor) -> dict:
     """Analiza un enlace: título, autor, duración, miniatura y opciones por calidad.
@@ -135,28 +187,9 @@ def info(peticion: dict, emisor: Emisor) -> dict:
     import yt_dlp
 
     registro = _RegistroYtDlp(emisor)
-    opciones_ydl = {
-        "logger": registro,
-        "quiet": True,
-        "noprogress": True,
-        "noplaylist": True,
-        "skip_download": True,
-        "socket_timeout": 20,
-        "extractor_retries": 2,
-        "cachedir": peticion.get("cache") or False,
-        # Solo para los tests (archivos locales); nunca desde la interfaz.
-        "enable_file_urls": bool(peticion.get("permitir_archivos")),
-    }
-    with yt_dlp.YoutubeDL(opciones_ydl) as ydl:
+    with yt_dlp.YoutubeDL(dict(_opciones_comunes(peticion, registro), skip_download=True)) as ydl:
         datos = ydl.sanitize_info(ydl.extract_info(peticion["url"], download=False))
-
-    if datos.get("_type") == "playlist":
-        entradas = [e for e in datos.get("entries") or [] if e]
-        if not entradas:
-            raise yt_dlp.utils.DownloadError("Unsupported URL: la publicación no contiene videos")
-        if len(entradas) > 1:
-            registro.avisos.append(f"La publicación tiene {len(entradas)} videos; se usa el primero.")
-        datos = entradas[0]
+    datos = _primera_entrada(datos, registro)
 
     return {
         "id": datos.get("id"),
@@ -169,3 +202,105 @@ def info(peticion: dict, emisor: Emisor) -> dict:
         "opciones": seleccion.opciones(datos),
         "avisos": registro.avisos,
     }
+
+
+class _Progreso:
+    """Progress hook de yt-dlp: manda el progreso a Swift (máx. 4 veces por segundo)
+    y cancela la descarga si Swift lo pide."""
+
+    INTERVALO = 0.25
+
+    def __init__(self, emisor: Emisor, parte: str):
+        self.emisor, self.parte = emisor, parte
+        self._ultimo = 0.0
+
+    def __call__(self, d: dict):
+        estado = d.get("status")
+        if estado not in ("downloading", "finished"):
+            return
+        ahora = time.monotonic()
+        if estado == "downloading" and ahora - self._ultimo < self.INTERVALO:
+            return
+        self._ultimo = ahora
+        total, estimado = d.get("total_bytes"), False
+        if not total and d.get("total_bytes_estimate"):
+            total, estimado = d["total_bytes_estimate"], True
+        cancelar = self.emisor.emitir({
+            "tipo": "progreso",
+            "parte": self.parte,
+            "estado": "terminado" if estado == "finished" else "descargando",
+            "descargado": int(d.get("downloaded_bytes") or 0),
+            "total": int(total) if total else None,
+            "estimado": estimado,
+            "velocidad": d.get("speed"),
+            "eta": d.get("eta"),
+        })
+        if cancelar and estado == "downloading":
+            from yt_dlp.utils import DownloadCancelled
+            raise DownloadCancelled("Cancelado por el usuario")
+
+
+@_expuesta
+def descargar(peticion: dict, emisor: Emisor) -> dict:
+    """Descarga cada parte (video y/o audio) con su format_id, sin unirlas (eso lo hace Swift).
+
+    Petición: {"url", "partes": [{"parte": "video"|"audio", "formato": format_id}],
+               "carpeta", "cache", "permitir_archivos"}
+    Respuesta: {"archivos": {"video": ruta, "audio": ruta}, "titulo", "id"}
+    """
+    import yt_dlp
+
+    registro = _RegistroYtDlp(emisor)
+    carpeta = peticion["carpeta"]
+    os.makedirs(carpeta, exist_ok=True)
+    comunes = _opciones_comunes(peticion, registro)
+
+    # Se analiza una vez y cada parte se descarga sobre una copia de ese resultado.
+    with yt_dlp.YoutubeDL(dict(comunes, skip_download=True)) as ydl:
+        datos = _primera_entrada(ydl.extract_info(peticion["url"], download=False), registro)
+
+    archivos = {}
+    for parte in peticion["partes"]:
+        nombre, formato = parte["parte"], parte["formato"]
+        opciones = dict(
+            comunes,
+            format=formato,
+            outtmpl={"default": os.path.join(carpeta, f"{nombre}.%(ext)s")},
+            progress_hooks=[_Progreso(emisor, nombre)],
+            continuedl=True,  # si se cortó, continúa el .part
+            retries=10,
+            fragment_retries=10,
+            concurrent_fragment_downloads=4,
+        )
+        emisor.log("info", f"Descargando {nombre} (formato {formato})")
+        with yt_dlp.YoutubeDL(opciones) as ydl:
+            resultado = ydl.process_ie_result(copy.deepcopy(datos), download=True)
+        rutas = [d.get("filepath") for d in resultado.get("requested_downloads") or [] if d.get("filepath")]
+        if not rutas:
+            raise RuntimeError(f"yt-dlp no devolvió el archivo de {nombre}")
+        archivos[nombre] = rutas[0]
+
+    return {"archivos": archivos, "titulo": datos.get("title"), "id": datos.get("id")}
+
+
+_RE_VERSION = re.compile(r"__version__\s*=\s*'([^']+)'")
+_RE_EJS = re.compile(r"VERSION\s*=\s*'([^']+)'")
+
+
+@_expuesta
+def inspeccionar_paquete(peticion: dict, emisor: Emisor) -> dict:
+    """Lee qué versión de yt-dlp trae un zipapp o wheel (sin importarlo) y qué yt-dlp-ejs exige.
+
+    Petición: {"ruta": str}. Respuesta: {"yt_dlp", "ejs", "incluye_ejs"}.
+    """
+    with zipfile.ZipFile(peticion["ruta"]) as paquete:
+        nombres = set(paquete.namelist())
+        if "yt_dlp/version.py" not in nombres:
+            raise ValueError("El archivo no contiene yt-dlp")
+        version = _RE_VERSION.search(paquete.read("yt_dlp/version.py").decode("utf-8"))
+        info_ejs = "yt_dlp/extractor/youtube/jsc/_builtin/vendor/_info.py"
+        ejs = _RE_EJS.search(paquete.read(info_ejs).decode("utf-8")) if info_ejs in nombres else None
+        incluye_ejs = any(n.startswith("yt_dlp_ejs/") for n in nombres)
+    if not version:
+        raise ValueError("No se encontró la versión de yt-dlp")
+    return {"yt_dlp": version.group(1), "ejs": ejs.group(1) if ejs else None, "incluye_ejs": incluye_ejs}
