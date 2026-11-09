@@ -202,7 +202,7 @@ XCTAssertEqual(Enlaces.extraerPrimerEnlace(de: "  \nhttps://x.com/a/status/1\n "
 **Archivos:**
 - Crear: `App/Sources/App/EstadoApp.swift`
 - Modificar: `App/Sources/App/DescargadorApp.swift` (raíz real)
-- Crear: `App/Sources/Pantallas/Comun/Estilo.swift`
+- Crear: `App/Sources/Pantallas/Comun/Componentes.swift` (`VistaVacia`, `IconoPlataforma`; sin tokens propios: colores semánticos del sistema + acento del catálogo)
 - Crear: `App/Sources/Pantallas/PestanasView.swift`
 - Crear: `App/Sources/Pantallas/Descargar/{DescargarView, BannerPortapapeles, TarjetaEnlace}.swift`
 - Crear: `App/Sources/Pantallas/Historial/HistorialView.swift`
