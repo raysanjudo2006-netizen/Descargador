@@ -1,7 +1,7 @@
 # Compila Descargador en un Mac de GitHub (gratis en repositorios públicos).
 #
 #  - compilar:  genera Descargador.ipa SIN FIRMAR (artifact) y, en tags v*, lo publica en Releases.
-#  - simulador: ejecuta los tests en un iPhone simulado con iOS 18.
+#  - simulador: ejecuta los tests en un iPhone simulado con iOS 18 y sube capturas de cada pantalla.
 #
 # Si algo falla, abre la ejecución y mira primero la pestaña "Summary": ahí aparecen
 # los errores resumidos. El log completo se sube como artifact.
@@ -91,6 +91,15 @@ jobs:
 
       - name: Ejecutar tests en el simulador
         run: bash scripts/ci/probar_simulador.sh
+
+      - name: Subir capturas del simulador
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: capturas-simulador
+          path: build/capturas/
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Subir resultados de los tests (solo si falla)
         if: failure()

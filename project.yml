@@ -77,6 +77,20 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.personal.descargador.tests
 
+  # Tests de interfaz: recorren la app y guardan capturas de cada pantalla.
+  DescargadorUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/UI
+    dependencies:
+      - target: Descargador
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.personal.descargador.uitests
+        TEST_TARGET_NAME: Descargador
+
 schemes:
   Descargador:
     build:
@@ -88,5 +102,6 @@ schemes:
       config: Debug
       targets:
         - DescargadorTests
+        - DescargadorUITests
     archive:
       config: Release
