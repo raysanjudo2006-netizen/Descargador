@@ -9,6 +9,7 @@ import SwiftUI
 @main
 struct DescargadorApp: App {
     @StateObject private var estado: EstadoApp
+    @StateObject private var gestor = GestorDescargas()
     @AppStorage("apariencia") private var apariencia: Apariencia = .sistema
 
     init() {
@@ -22,6 +23,7 @@ struct DescargadorApp: App {
         WindowGroup {
             PestanasView()
                 .environmentObject(estado)
+                .environmentObject(gestor)
                 .environmentObject(Registro.compartido)
                 .preferredColorScheme(apariencia.esquema)
                 .onOpenURL { url in

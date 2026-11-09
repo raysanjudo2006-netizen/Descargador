@@ -1,20 +1,32 @@
+import QuickLook
 import SwiftUI
 import UIKit
 
-/// Pantalla principal: pegar el enlace, analizarlo y (desde la Etapa 3) descargar.
+/// Pantalla principal: pegar el enlace, analizarlo y descargar.
 struct DescargarView: View {
     @EnvironmentObject private var estado: EstadoApp
+    @EnvironmentObject private var gestor: GestorDescargas
     @Environment(\.scenePhase) private var fase
     @FocusState private var campoEnfocado: Bool
+    @AppStorage("guardarEnFotos") private var guardarEnFotos = true
+    @AppStorage("mantenerActivo") private var mantenerActivo = false
 
     /// Hay un enlace en el portapapeles que aún no hemos ofrecido.
     @State private var hayEnlaceCopiado = false
     /// `changeCount` del portapapeles cuando se detectó ese enlace.
     @State private var cambioDetectado = 0
+    /// Archivo abierto con Vista Rápida.
+    @State private var vistaPrevia: URL?
 
     var body: some View {
         NavigationStack {
             Form {
+                if gestor.fase != .inactiva {
+                    Section("Descarga") {
+                        TarjetaDescarga(gestor: gestor, vistaPrevia: $vistaPrevia)
+                    }
+                }
+
                 if hayEnlaceCopiado {
                     Section {
                         BannerPortapapeles(
@@ -54,7 +66,10 @@ struct DescargarView: View {
                         }
                     }
                     if case .listo(let info) = estado.analisis {
-                        ListaCalidades(info: info, calidadPedida: estado.calidadSolicitada)
+                        ListaCalidades(info: info, calidadPedida: estado.calidadSolicitada,
+                                       bloqueado: gestor.ocupado) { opcion in
+                            descargar(opcion, de: info)
+                        }
                     }
                 }
             }
@@ -63,11 +78,27 @@ struct DescargarView: View {
             .animation(.default, value: hayEnlaceCopiado)
             .animation(.default, value: estado.enlaceAnalizado)
             .animation(.default, value: estado.analisis)
+            .animation(.default, value: gestor.ocupado)
         }
+        .quickLookPreview($vistaPrevia)
         .onAppear(perform: comprobarPortapapeles)
         .onChange(of: fase) { nueva in
             if nueva == .active { comprobarPortapapeles() }
         }
+        .onChange(of: estado.analisis) { nuevo in
+            // Si Atajos o descargador://…&calidad=… pidió una calidad, se descarga sola.
+            if case .listo(let info) = nuevo, let calidad = estado.calidadSolicitada,
+               let opcion = info.opcion(calidad), opcion.disponible {
+                descargar(opcion, de: info)
+            }
+        }
+    }
+
+    private func descargar(_ opcion: OpcionCalidad, de info: InfoVideo) {
+        guard let url = estado.enlaceAnalizado, !gestor.ocupado else { return }
+        campoEnfocado = false
+        gestor.iniciar(info: info, opcion: opcion, url: url,
+                       guardarEnFotos: guardarEnFotos, mantenerActivo: mantenerActivo)
     }
 
     // MARK: - Secciones

@@ -17,11 +17,7 @@ struct InfoVideo: Decodable, Equatable {
     /// "3:45" o "1:02:03".
     var duracionTexto: String? {
         guard let duracion, duracion > 0 else { return nil }
-        let total = Int(duracion.rounded())
-        let horas = total / 3600, minutos = (total % 3600) / 60, segundos = total % 60
-        return horas > 0
-            ? String(format: "%d:%02d:%02d", horas, minutos, segundos)
-            : String(format: "%d:%02d", minutos, segundos)
+        return Formato.tiempo(duracion)
     }
 
     func opcion(_ calidad: Calidad) -> OpcionCalidad? {
@@ -51,7 +47,7 @@ struct OpcionCalidad: Decodable, Equatable, Identifiable {
     /// "12,3 MB" o "≈ 12,3 MB"; nil si no se conoce.
     var tamanoTexto: String? {
         guard let bytes else { return nil }
-        let texto = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        let texto = Formato.bytes(bytes)
         return aproximado ? "≈ \(texto)" : texto
     }
 }

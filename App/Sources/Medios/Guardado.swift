@@ -24,6 +24,34 @@ enum Guardado {
             .appendingPathComponent("Descargas", isDirectory: true)
     }
 
+    /// Caches/descargas: partes a medio descargar (permiten continuar si se corta).
+    static var carpetaTemporal: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("descargas", isDirectory: true)
+    }
+
+    /// Espacio que ocupan las descargas de la app (no cuenta lo guardado en Fotos).
+    static func espacioUsado() -> Int64 {
+        tamano(carpetaDescargas) + tamano(carpetaTemporal)
+    }
+
+    /// Borra las descargas de la app. Lo guardado en Fotos no se toca.
+    static func vaciar() {
+        try? FileManager.default.removeItem(at: carpetaDescargas)
+        try? FileManager.default.removeItem(at: carpetaTemporal)
+    }
+
+    private static func tamano(_ carpeta: URL) -> Int64 {
+        guard let enumerador = FileManager.default.enumerator(at: carpeta, includingPropertiesForKeys: [.fileSizeKey]) else {
+            return 0
+        }
+        var total: Int64 = 0
+        for case let archivo as URL in enumerador {
+            total += Int64((try? archivo.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+        return total
+    }
+
     /// Mueve el archivo final a la carpeta de descargas con el título como nombre.
     static func moverADescargas(_ archivo: URL, titulo: String, carpeta: URL = carpetaDescargas) throws -> URL {
         try FileManager.default.createDirectory(at: carpeta, withIntermediateDirectories: true)

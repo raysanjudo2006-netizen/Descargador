@@ -42,6 +42,25 @@ final class MotorPython: AnalizadorVideo {
         try await info(url: url)
     }
 
+    /// Descarga las partes (video y/o audio) en `carpeta`, sin unirlas.
+    /// `alProgreso` y `cancelado` se llaman desde el hilo de Python.
+    func descargar(url: URL, partes: [ParteDescarga], carpeta: URL, permitirArchivos: Bool = false,
+                   alProgreso: @escaping (ProgresoParte) -> Void,
+                   cancelado: @escaping () -> Bool) async throws -> ResultadoDescargaPython {
+        try await llamar("descargar", [
+            "url": url.absoluteString,
+            "partes": partes.map { ["parte": $0.parte, "formato": $0.formato] },
+            "carpeta": carpeta.path,
+            "cache": Self.carpetaCache.path,
+            "permitir_archivos": permitirArchivos,
+        ], eventos: ManejadorEventos(alProgreso: alProgreso, cancelado: cancelado))
+    }
+
+    /// Lee la versión de yt-dlp (y la de yt-dlp-ejs que exige) de un zipapp o wheel descargado.
+    func inspeccionarPaquete(_ archivo: URL) async throws -> PaqueteYtDlp {
+        try await llamar("inspeccionar_paquete", ["ruta": archivo.path])
+    }
+
     /// Caché de yt-dlp (firmas de YouTube, etc.).
     static var carpetaCache: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -50,14 +69,15 @@ final class MotorPython: AnalizadorVideo {
 
     // MARK: - Llamadas
 
-    private func llamar<T: Decodable>(_ funcion: String, _ peticion: [String: Any]) async throws -> T {
+    private func llamar<T: Decodable>(_ funcion: String, _ peticion: [String: Any],
+                                      eventos: ManejadorEventos? = nil) async throws -> T {
         let json = String(decoding: try JSONSerialization.data(withJSONObject: peticion), as: UTF8.self)
         let inicioLlamada = Date()
         let respuesta: String = try await withCheckedThrowingContinuation { continuacion in
             let hilo = Thread { [self] in
                 do {
                     try asegurarInicio()
-                    continuacion.resume(returning: llamarSincrono(funcion, json))
+                    continuacion.resume(returning: llamarSincrono(funcion, json, eventos))
                 } catch {
                     continuacion.resume(throwing: error)
                 }
@@ -70,6 +90,9 @@ final class MotorPython: AnalizadorVideo {
                          categoria: "python")
         do {
             return try Self.decodificar(Data(respuesta.utf8))
+        } catch let error as ErrorMotor where error.codigo == "cancelado" {
+            registro.info("\(funcion): cancelado", categoria: "python")
+            throw error
         } catch let error as ErrorMotor {
             registro.error("\(funcion): [\(error.codigo)] \(error.mensaje)", categoria: "python")
             if let detalle = error.detalle {
@@ -80,8 +103,8 @@ final class MotorPython: AnalizadorVideo {
     }
 
     /// Ejecuta la función en el hilo actual (bloquea hasta que Python termina).
-    private func llamarSincrono(_ funcion: String, _ json: String) -> String {
-        let caja = CajaEventos(registro: registro)
+    private func llamarSincrono(_ funcion: String, _ json: String, _ eventos: ManejadorEventos?) -> String {
+        let caja = CajaEventos(registro: registro, eventos: eventos)
         let contexto = Unmanaged.passRetained(caja).toOpaque()
         defer { Unmanaged<CajaEventos>.fromOpaque(contexto).release() }
         guard let puntero = dp_llamar(funcion, json, callbackEventos, contexto) else {
@@ -192,27 +215,52 @@ private struct ErrorPython: Decodable {
     let detalle: String?
 }
 
-/// Evento que manda Python por el callback.
+/// Evento que manda Python por el callback ("log" o "progreso").
 private struct EventoPython: Decodable {
     let tipo: String
     let nivel: String?
     let mensaje: String?
+    // Solo en "progreso":
+    let parte: String?
+    let estado: String?
+    let descargado: Int64?
+    let total: Int64?
+    let estimado: Bool?
+    let velocidad: Double?
+    let eta: Double?
+}
+
+/// A quién avisar del progreso y cómo saber si hay que cancelar.
+struct ManejadorEventos {
+    let alProgreso: (ProgresoParte) -> Void
+    let cancelado: () -> Bool
 }
 
 /// Contexto que viaja por C hasta el callback: aquí se reparten los eventos.
 private final class CajaEventos {
     let registro: Registro
+    let eventos: ManejadorEventos?
 
-    init(registro: Registro) {
+    init(registro: Registro, eventos: ManejadorEventos?) {
         self.registro = registro
+        self.eventos = eventos
     }
 
     /// Devuelve true para pedir a Python que cancele.
     func recibir(_ json: String) -> Bool {
         guard let evento = try? JSONDecoder().decode(EventoPython.self, from: Data(json.utf8)) else {
-            return false
+            return eventos?.cancelado() ?? false
         }
-        if evento.tipo == "log" {
+        if evento.tipo == "progreso", let parte = evento.parte {
+            eventos?.alProgreso(ProgresoParte(
+                parte: parte,
+                terminado: evento.estado == "terminado",
+                descargado: evento.descargado ?? 0,
+                total: evento.total,
+                estimado: evento.estimado ?? false,
+                velocidad: evento.velocidad,
+                eta: evento.eta))
+        } else if evento.tipo == "log" {
             let nivel: NivelRegistro
             switch evento.nivel {
             case "error": nivel = .error
@@ -222,7 +270,7 @@ private final class CajaEventos {
             }
             registro.registrar(nivel, evento.mensaje ?? "", categoria: "yt-dlp")
         }
-        return false
+        return eventos?.cancelado() ?? false
     }
 }
 

@@ -67,6 +67,11 @@ targets:
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         ITSAppUsesNonExemptEncryption: false
+        # Guardar en Fotos (permiso "solo añadir").
+        NSPhotoLibraryAddUsageDescription: Para guardar en Fotos los videos que descargas.
+        # "Mantener activo": audio silencioso mientras descarga para que iOS no pause la app.
+        UIBackgroundModes:
+          - audio
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.personal.descargador

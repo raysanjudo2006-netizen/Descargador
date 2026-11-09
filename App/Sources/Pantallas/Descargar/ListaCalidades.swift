@@ -1,19 +1,28 @@
 import SwiftUI
 
-/// Calidades disponibles con su tamaño aproximado (elegir y descargar llega en la Etapa 3).
+/// Calidades disponibles con su tamaño aproximado. Tocar una empieza la descarga.
 struct ListaCalidades: View {
     let info: InfoVideo
     let calidadPedida: Calidad?
+    /// Hay otra descarga en marcha.
+    let bloqueado: Bool
+    let alElegir: (OpcionCalidad) -> Void
 
     var body: some View {
         Section {
             ForEach(info.opciones) { opcion in
-                FilaCalidad(opcion: opcion, pedida: opcion.tipo != nil && opcion.tipo == calidadPedida)
+                Button {
+                    alElegir(opcion)
+                } label: {
+                    FilaCalidad(opcion: opcion, pedida: opcion.tipo != nil && opcion.tipo == calidadPedida)
+                }
+                .disabled(!opcion.disponible || bloqueado)
+                .accessibilityIdentifier("calidad-\(opcion.calidad)")
             }
         } header: {
             Text("Calidad")
         } footer: {
-            Text("Elegir una calidad y descargar llega en la Etapa 3.")
+            Text(bloqueado ? "Espera a que termine la descarga actual." : "Toca una calidad para descargarla.")
         }
     }
 }
@@ -30,6 +39,7 @@ private struct FilaCalidad: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(opcion.tipo?.titulo ?? opcion.calidad)
+                    .foregroundStyle(.primary)
                 if let detalle {
                     Text(detalle)
                         .font(.caption)
@@ -49,7 +59,6 @@ private struct FilaCalidad: View {
         }
         .opacity(opcion.disponible ? 1 : 0.45)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("calidad-\(opcion.calidad)")
     }
 
     private var textoTamano: String {

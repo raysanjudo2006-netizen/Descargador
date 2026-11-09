@@ -1,15 +1,43 @@
 import SwiftUI
 
-/// Ajustes de la app: apariencia, motor de descarga y datos de la compilación.
+/// Ajustes de la app: descargas, apariencia, motor de descarga y datos de la compilación.
 struct AjustesView: View {
+    @EnvironmentObject private var gestor: GestorDescargas
     @AppStorage("apariencia") private var apariencia: Apariencia = .sistema
+    @AppStorage("guardarEnFotos") private var guardarEnFotos = true
+    @AppStorage("mantenerActivo") private var mantenerActivo = false
     @State private var copiado = false
     @State private var versiones: VersionesMotor?
     @State private var errorMotor: String?
+    @State private var espacioUsado: Int64?
+    @State private var confirmarVaciado = false
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Toggle("Guardar videos en Fotos", isOn: $guardarEnFotos)
+                    Toggle("Mantener activo en segundo plano", isOn: $mantenerActivo)
+                        .accessibilityIdentifier("interruptorMantenerActivo")
+                    Button(role: .destructive) {
+                        confirmarVaciado = true
+                    } label: {
+                        LabeledContent("Vaciar descargas", value: espacioUsado.map(Formato.bytes) ?? "…")
+                    }
+                    .disabled(gestor.ocupado)
+                } header: {
+                    Text("Descargas")
+                } footer: {
+                    Text("«Mantener activo» reproduce silencio mientras descarga para que iOS no pause la app al salir de ella; gasta algo más de batería. Vaciar no borra lo guardado en Fotos.")
+                }
+                .confirmationDialog("¿Borrar las descargas guardadas en la app?", isPresented: $confirmarVaciado,
+                                    titleVisibility: .visible) {
+                    Button("Vaciar descargas", role: .destructive) {
+                        Guardado.vaciar()
+                        Task { await calcularEspacio() }
+                    }
+                }
+
                 Section("Apariencia") {
                     Picker("Tema", selection: $apariencia) {
                         ForEach(Apariencia.allCases) { opcion in
@@ -55,8 +83,16 @@ struct AjustesView: View {
                 }
             }
             .navigationTitle("Ajustes")
-            .task { await cargarVersiones() }
+            .task {
+                await calcularEspacio()
+                await cargarVersiones()
+            }
         }
+    }
+
+    /// Calcula el espacio de las descargas fuera del hilo principal.
+    private func calcularEspacio() async {
+        espacioUsado = await Task.detached(priority: .utility) { Guardado.espacioUsado() }.value
     }
 
     private var textoPendiente: String {
