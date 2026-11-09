@@ -79,6 +79,13 @@ final class EnlacesTests: XCTestCase {
         XCTAssertEqual(p?.calidad, .p360)
     }
 
+    func test_peticionConTextoCompartidoEnteroDeTikTok() {
+        // Un atajo que codifica el texto compartido completo, no solo el enlace.
+        let p = peticion("descargador://download?url=Mira%20esto%20%F0%9F%98%82%20https%3A%2F%2Fvm.tiktok.com%2FZMabc%2F%20%23fyp&calidad=720")
+        XCTAssertEqual(p?.url.absoluteString, "https://vm.tiktok.com/ZMabc/")
+        XCTAssertEqual(p?.calidad, .p720)
+    }
+
     func test_peticionConCalidadDesconocida() {
         let p = peticion("descargador://download?url=https://a.com/v&calidad=4k")
         XCTAssertEqual(p?.url.absoluteString, "https://a.com/v")

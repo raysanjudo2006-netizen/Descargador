@@ -91,7 +91,12 @@ enum Enlaces {
             texto = decodificado
         }
 
-        guard let url = URL(string: texto), esWeb(url) else { return nil }
+        // Lo normal es una URL limpia; pero si un atajo pasó el texto compartido entero
+        // ("Mira esto… https://vm.tiktok.com/… #fyp"), se busca el enlace dentro.
+        if let url = URL(string: texto), esWeb(url) {
+            return PeticionDescarga(url: url, calidad: calidad)
+        }
+        guard let url = extraerPrimerEnlace(de: texto) else { return nil }
         return PeticionDescarga(url: url, calidad: calidad)
     }
 
