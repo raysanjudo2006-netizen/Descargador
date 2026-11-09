@@ -46,30 +46,58 @@ class Emisor:
         return self.emitir({"tipo": "log", "nivel": nivel, "mensaje": str(mensaje)})
 
 
-class _RegistroYtDlp:
-    """Logger para yt-dlp: reenvía todo al Registro de la app y guarda los avisos."""
+class _Cancelacion:
+    """Petición de cancelar compartida por el logger y los progress hooks de una descarga.
 
-    def __init__(self, emisor: Emisor):
+    Una vez activada, cada llamada siguiente vuelve a lanzar DownloadCancelled: así se paran
+    también los hilos que descargan fragmentos (HLS/DASH) en paralelo.
+    """
+
+    def __init__(self):
+        self.activa = False
+
+    def comprobar(self):
+        if self.activa:
+            from yt_dlp.utils import DownloadCancelled
+            raise DownloadCancelled("Cancelado por el usuario")
+
+
+class _RegistroYtDlp:
+    """Logger para yt-dlp: reenvía todo al Registro de la app y guarda los avisos.
+
+    Si se le da una cancelación, cada mensaje sirve también para enterarse de que Swift
+    pidió cancelar (por ejemplo, durante el análisis, antes de que haya progreso).
+    """
+
+    def __init__(self, emisor: Emisor, cancelacion: "_Cancelacion | None" = None):
         self.emisor = emisor
+        self.cancelacion = cancelacion
         self.avisos: list[str] = []
+
+    def _enviar(self, nivel: str, mensaje):
+        pide_cancelar = self.emisor.log(nivel, mensaje)
+        if self.cancelacion is not None:
+            if pide_cancelar:
+                self.cancelacion.activa = True
+            self.cancelacion.comprobar()
 
     def debug(self, mensaje):
         # Con un logger, yt-dlp manda aquí también los mensajes normales; los de
         # depuración de verdad empiezan por "[debug] ".
         if mensaje.startswith("[debug] "):
-            self.emisor.log("depuracion", mensaje[len("[debug] "):])
+            self._enviar("depuracion", mensaje[len("[debug] "):])
         else:
-            self.emisor.log("info", mensaje)
+            self._enviar("info", mensaje)
 
     def info(self, mensaje):
-        self.emisor.log("info", mensaje)
+        self._enviar("info", mensaje)
 
     def warning(self, mensaje):
         self.avisos.append(str(mensaje))
-        self.emisor.log("aviso", mensaje)
+        self._enviar("aviso", mensaje)
 
     def error(self, mensaje):
-        self.emisor.log("error", mensaje)
+        self._enviar("error", mensaje)
 
 
 def _respuesta_ok(datos) -> str:
@@ -210,11 +238,12 @@ class _Progreso:
 
     INTERVALO = 0.25
 
-    def __init__(self, emisor: Emisor, parte: str):
-        self.emisor, self.parte = emisor, parte
+    def __init__(self, emisor: Emisor, parte: str, cancelacion: _Cancelacion):
+        self.emisor, self.parte, self.cancelacion = emisor, parte, cancelacion
         self._ultimo = 0.0
 
     def __call__(self, d: dict):
+        self.cancelacion.comprobar()  # tras cancelar, todas las llamadas (de todos los hilos) paran
         estado = d.get("status")
         if estado not in ("downloading", "finished"):
             return
@@ -235,9 +264,9 @@ class _Progreso:
             "velocidad": d.get("speed"),
             "eta": d.get("eta"),
         })
-        if cancelar and estado == "downloading":
-            from yt_dlp.utils import DownloadCancelled
-            raise DownloadCancelled("Cancelado por el usuario")
+        if cancelar:
+            self.cancelacion.activa = True
+            self.cancelacion.comprobar()
 
 
 @_expuesta
@@ -250,7 +279,8 @@ def descargar(peticion: dict, emisor: Emisor) -> dict:
     """
     import yt_dlp
 
-    registro = _RegistroYtDlp(emisor)
+    cancelacion = _Cancelacion()
+    registro = _RegistroYtDlp(emisor, cancelacion)
     carpeta = peticion["carpeta"]
     os.makedirs(carpeta, exist_ok=True)
     comunes = _opciones_comunes(peticion, registro)
@@ -261,12 +291,15 @@ def descargar(peticion: dict, emisor: Emisor) -> dict:
 
     archivos = {}
     for parte in peticion["partes"]:
+        cancelacion.comprobar()
         nombre, formato = parte["parte"], parte["formato"]
+        # El format_id va en el nombre: un .part de otro formato nunca se reanuda por error.
+        seguro = re.sub(r"[^A-Za-z0-9_.-]", "_", formato)
         opciones = dict(
             comunes,
             format=formato,
-            outtmpl={"default": os.path.join(carpeta, f"{nombre}.%(ext)s")},
-            progress_hooks=[_Progreso(emisor, nombre)],
+            outtmpl={"default": os.path.join(carpeta, f"{nombre}-{seguro}.%(ext)s")},
+            progress_hooks=[_Progreso(emisor, nombre, cancelacion)],
             continuedl=True,  # si se cortó, continúa el .part
             retries=10,
             fragment_retries=10,

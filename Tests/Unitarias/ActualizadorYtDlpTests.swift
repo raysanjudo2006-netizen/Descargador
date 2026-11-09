@@ -57,6 +57,24 @@ final class ActualizadorYtDlpTests: XCTestCase {
         XCTAssertEqual(rutas.map { URL(fileURLWithPath: $0).lastPathComponent }, ["yt-dlp.zip", "ejs.whl"])
     }
 
+    func test_limpiarSinUsoConservaLaActiva() throws {
+        let carpeta = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        for nombre in ["2026.11.03-aaaa", "2026.10.30-bbbb"] {
+            try FileManager.default.createDirectory(at: carpeta.appendingPathComponent(nombre), withIntermediateDirectories: true)
+        }
+        let activo = InstalacionYtDlp(version: "2026.11.03", ejs: nil,
+                                      archivoYtDlp: "2026.11.03-aaaa/yt-dlp.zip", archivoEjs: nil)
+        try JSONEncoder().encode(activo).write(to: carpeta.appendingPathComponent("activo.json"))
+        ActualizadorYtDlp.limpiarSinUso(en: carpeta)
+        let quedan = try FileManager.default.contentsOfDirectory(atPath: carpeta.path).sorted()
+        XCTAssertEqual(quedan, ["2026.11.03-aaaa", "activo.json"])
+    }
+
+    func test_ejsIncluidoSeLeeDeLaApp() {
+        // En el simulador la app lleva yt-dlp-ejs 0.8.0 dentro (python/app_packages).
+        XCTAssertEqual(ActualizadorYtDlp.ejsIncluido, "0.8.0")
+    }
+
     func test_versionesMotorDetectaYtDlpActualizado() throws {
         let json = #"{"ok":true,"datos":{"python":"3.14.10","yt_dlp":"2026.11.03","yt_dlp_ejs":"0.8.0","ruta_yt_dlp":"/var/mobile/Containers/Data/Application/X/Library/Application Support/yt-dlp/2026.11.03/yt-dlp.zip/yt_dlp"}}"#
         let versiones: VersionesMotor = try MotorPython.decodificar(Data(json.utf8))

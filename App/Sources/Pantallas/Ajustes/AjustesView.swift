@@ -128,7 +128,7 @@ struct AjustesView: View {
                 .foregroundStyle(.green)
         case .disponible(let version):
             Button {
-                Task { await actualizador.instalar(ejsIncluido: versiones?.ytDlpEjs) }
+                Task { await actualizador.instalar() }
             } label: {
                 Label("Instalar yt-dlp \(version)", systemImage: "arrow.down.circle.fill")
             }

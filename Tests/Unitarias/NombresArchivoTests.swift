@@ -13,6 +13,18 @@ final class NombresArchivoTests: XCTestCase {
         XCTAssertEqual(NombresArchivo.seguro(String(repeating: "a", count: 200)).count, 80)
     }
 
+    func test_emojisCompuestosNoSeRompen() {
+        // 👨‍👩‍👧 lleva ZWJ (U+200D) entre los emojis: no debe convertirse en "-".
+        XCTAssertEqual(NombresArchivo.seguro("Familia 👨‍👩‍👧"), "Familia 👨‍👩‍👧")
+    }
+
+    func test_tituloDeEmojisNoPasaDelLimiteDeBytes() {
+        let titulo = String(repeating: "👩🏽‍💻", count: 80)  // ~15 bytes cada uno
+        let nombre = NombresArchivo.seguro(titulo)
+        XCTAssertLessThanOrEqual(nombre.utf8.count, 200)
+        XCTAssertFalse(nombre.isEmpty)
+    }
+
     func test_sinColisionNumeraLosRepetidos() throws {
         let carpeta = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: carpeta, withIntermediateDirectories: true)

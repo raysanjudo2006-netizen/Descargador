@@ -120,6 +120,9 @@ enum Medios {
         } onCancel: {
             sesion.cancelExport()
         }
+        // Parar el vigilante antes de dar el resultado: así nunca llega un progreso viejo tras el 1.
+        vigilante.cancel()
+        _ = await vigilante.value
 
         switch sesion.status {
         case .completed:

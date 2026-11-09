@@ -90,6 +90,8 @@ struct DescargarView: View {
             if case .listo(let info) = nuevo, let calidad = estado.calidadSolicitada,
                let opcion = info.opcion(calidad), opcion.disponible {
                 descargar(opcion, de: info)
+                // Solo una vez: reintentar el análisis no debe repetir la descarga.
+                estado.calidadSolicitada = nil
             }
         }
     }

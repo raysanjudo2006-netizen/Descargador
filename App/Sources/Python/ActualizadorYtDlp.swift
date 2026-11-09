@@ -92,6 +92,28 @@ final class ActualizadorYtDlp: ObservableObject {
         return completas.allSatisfy { FileManager.default.fileExists(atPath: $0) } ? completas : []
     }
 
+    /// Borra las versiones descargadas que ya no se usan. Se llama al arrancar Python, antes de
+    /// importar nada: nunca se borra un archivo que el intérprete en marcha esté usando.
+    nonisolated static func limpiarSinUso(en carpeta: URL = carpetaPorDefecto) {
+        let enUso = leerActivo(en: carpeta).map { activo in
+            activo.archivoYtDlp.split(separator: "/").first.map(String.init) ?? ""
+        }
+        let contenido = (try? FileManager.default.contentsOfDirectory(atPath: carpeta.path)) ?? []
+        for nombre in contenido where nombre != "activo.json" && nombre != enUso {
+            try? FileManager.default.removeItem(at: carpeta.appendingPathComponent(nombre))
+        }
+    }
+
+    /// Versión de yt-dlp-ejs que viene dentro de la app (de su carpeta .dist-info).
+    nonisolated static var ejsIncluido: String? {
+        let paquetes = Bundle.main.bundleURL.appendingPathComponent("python/app_packages", isDirectory: true)
+        let nombres = (try? FileManager.default.contentsOfDirectory(atPath: paquetes.path)) ?? []
+        guard let info = nombres.first(where: { $0.hasPrefix("yt_dlp_ejs-") && $0.hasSuffix(".dist-info") }) else {
+            return nil
+        }
+        return String(info.dropFirst("yt_dlp_ejs-".count).dropLast(".dist-info".count))
+    }
+
     nonisolated private static func leerActivo(en carpeta: URL) -> InstalacionYtDlp? {
         guard let datos = try? Data(contentsOf: carpeta.appendingPathComponent("activo.json")) else { return nil }
         return try? JSONDecoder().decode(InstalacionYtDlp.self, from: datos)
@@ -113,14 +135,15 @@ final class ActualizadorYtDlp: ObservableObject {
     }
 
     /// Descarga, verifica e instala la versión encontrada por `buscar`.
-    /// `ejsIncluido`: versión de yt-dlp-ejs que trae la app (si coincide, no se descarga).
-    func instalar(ejsIncluido: String?) async {
+    func instalar() async {
         guard let release = ultimaRelease, let zipapp = release.archivo("yt-dlp") else {
             estado = .error("Primero busca la actualización.")
             return
         }
         let version = release.tagName
-        let destino = carpeta.appendingPathComponent(version, isDirectory: true)
+        // Carpeta nueva en cada instalación: si falla, solo se borra ella (nunca la activa).
+        let nombreCarpeta = "\(version)-\(UUID().uuidString.prefix(8))"
+        let destino = carpeta.appendingPathComponent(nombreCarpeta, isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: destino, withIntermediateDirectories: true)
 
@@ -135,8 +158,9 @@ final class ActualizadorYtDlp: ObservableObject {
             }
 
             // yt-dlp exige una versión exacta de yt-dlp-ejs (el solucionador de YouTube).
+            // Si no es la que trae la app, se descarga junto a esta versión.
             var archivoEjs: String?
-            if let ejs = paquete.ejs, !paquete.incluyeEjs, ejs != ejsIncluido {
+            if let ejs = paquete.ejs, !paquete.incluyeEjs, ejs != Self.ejsIncluido {
                 estado = .descargando("Descargando yt-dlp-ejs \(ejs)…")
                 let releaseEjs = try await obtenerRelease("https://api.github.com/repos/yt-dlp/ejs/releases/tags/\(ejs)")
                 let nombreWheel = "yt_dlp_ejs-\(ejs)-py3-none-any.whl"
@@ -144,13 +168,13 @@ final class ActualizadorYtDlp: ObservableObject {
                     throw ErrorActualizacion.paqueteInesperado("falta \(nombreWheel) en GitHub")
                 }
                 try await descargarVerificado(wheel, a: destino.appendingPathComponent(nombreWheel))
-                archivoEjs = "\(version)/\(nombreWheel)"
+                archivoEjs = "\(nombreCarpeta)/\(nombreWheel)"
             }
 
             let activo = InstalacionYtDlp(version: version, ejs: paquete.ejs,
-                                          archivoYtDlp: "\(version)/yt-dlp.zip", archivoEjs: archivoEjs)
+                                          archivoYtDlp: "\(nombreCarpeta)/yt-dlp.zip", archivoEjs: archivoEjs)
             try JSONEncoder().encode(activo).write(to: carpeta.appendingPathComponent("activo.json"), options: .atomic)
-            borrarVersionesAntiguas(excepto: version)
+            // Las versiones anteriores se borran al próximo arranque (pueden estar en uso ahora).
             instalada = activo
             estado = .instalada(version)
             registro.info("yt-dlp \(version) instalado; se usará al reabrir la app", categoria: "actualizar")
@@ -160,9 +184,10 @@ final class ActualizadorYtDlp: ObservableObject {
         }
     }
 
-    /// Quita la versión instalada: al reabrir la app se usa la incluida.
+    /// Quita la versión instalada: al reabrir la app se usa la incluida. Sus archivos se
+    /// borran en el próximo arranque (ahora mismo pueden estar en uso).
     func volverAIncluida() {
-        try? FileManager.default.removeItem(at: carpeta)
+        try? FileManager.default.removeItem(at: carpeta.appendingPathComponent("activo.json"))
         instalada = nil
         estado = .inactivo
         registro.info("Se usará el yt-dlp incluido al reabrir la app", categoria: "actualizar")
@@ -222,13 +247,6 @@ final class ActualizadorYtDlp: ObservableObject {
             }
         }
         throw ultimoError
-    }
-
-    private func borrarVersionesAntiguas(excepto version: String) {
-        let contenido = (try? FileManager.default.contentsOfDirectory(atPath: carpeta.path)) ?? []
-        for nombre in contenido where nombre != version && nombre != "activo.json" {
-            try? FileManager.default.removeItem(at: carpeta.appendingPathComponent(nombre))
-        }
     }
 
     private func fallo(_ error: Error) {

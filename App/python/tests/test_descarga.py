@@ -30,6 +30,8 @@ class TestDescargar(unittest.TestCase):
             self.assertTrue(r["ok"], r)
             ruta = pathlib.Path(r["datos"]["archivos"]["video"])
             self.assertTrue(ruta.exists())
+            # El format_id va en el nombre para no reanudar un .part de otro formato.
+            self.assertEqual(ruta.name, "video-mp4.mp4")
             self.assertEqual(ruta.stat().st_size, 500_000)
             self.assertEqual(r["datos"]["titulo"], "muestra")
         progreso = [e for e in recolector.eventos if e["tipo"] == "progreso"]
