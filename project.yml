@@ -64,6 +64,19 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 
+  # Tests unitarios de la lógica (se ejecutan en el simulador de GitHub Actions).
+  DescargadorTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/Unitarias
+    dependencies:
+      - target: Descargador
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.personal.descargador.tests
+
 schemes:
   Descargador:
     build:
@@ -71,5 +84,9 @@ schemes:
         Descargador: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - DescargadorTests
     archive:
       config: Release

@@ -1,6 +1,7 @@
 # Compila Descargador en un Mac de GitHub (gratis en repositorios públicos).
 #
 #  - compilar:  genera Descargador.ipa SIN FIRMAR (artifact) y, en tags v*, lo publica en Releases.
+#  - simulador: ejecuta los tests en un iPhone simulado con iOS 18.
 #
 # Si algo falla, abre la ejecución y mira primero la pestaña "Summary": ahí aparecen
 # los errores resumidos. El log completo se sube como artifact.
@@ -71,3 +72,32 @@ jobs:
             gh release create "$GITHUB_REF_NAME" build/Descargador.ipa \
               --title "Descargador $GITHUB_REF_NAME" --generate-notes
           fi
+
+  simulador:
+    name: Probar en simulador (iOS 18)
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      XCODE_VERSION: "26.3"
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v7
+
+      - name: Preparar herramientas (XcodeGen, xcbeautify, Xcode)
+        run: bash scripts/ci/instalar_herramientas.sh
+
+      - name: Generar proyecto con XcodeGen
+        run: xcodegen generate
+
+      - name: Ejecutar tests en el simulador
+        run: bash scripts/ci/probar_simulador.sh
+
+      - name: Subir resultados de los tests (solo si falla)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: resultados-tests
+          path: |
+            build/Resultados.xcresult
+            build/logs/
+          if-no-files-found: ignore

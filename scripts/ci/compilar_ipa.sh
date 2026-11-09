@@ -5,18 +5,9 @@ set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$RAIZ"
+source scripts/ci/comun.sh
 mkdir -p build/logs
 LOG=build/logs/xcodebuild-iphoneos.log
-COMMIT="$(git rev-parse --short=7 HEAD 2>/dev/null || echo local)"
-NUM_BUILD="${GITHUB_RUN_NUMBER:-1}"
-
-formatear() {
-  if command -v xcbeautify >/dev/null 2>&1; then
-    xcbeautify --renderer github-actions
-  else
-    cat
-  fi
-}
 
 echo "::group::xcodebuild (iphoneos, Release, sin firmar)"
 set +e
