@@ -23,7 +23,8 @@ fecha; reproducir, compartir, borrar), calidad predeterminada, cookies opcionale
 - **Share Extension** (`com.apple.share-services`, sin storyboard ni App Groups): toma la URL o
   el texto compartido, extrae el enlace y abre `descargador://download?url=…` recorriendo la
   cadena de responders hasta `UIApplication.open`. Comparte `Enlaces.swift` y `Calidad.swift`.
-  `APPLICATION_EXTENSION_API_ONLY: NO` para poder llamar a `open` (app no destinada a la App Store).
+  Xcode 26 exige `APPLICATION_EXTENSION_API_ONLY: YES` en extensiones: la app contenedora se abre
+  llamando a `openURL:options:completionHandler:` por el runtime de Objective-C.
 - **App Intents:** `DescargarVideoIntent` (enlace + calidad, `openAppWhenRun`) deja el enlace en
   un buzón (`BuzonEnlaces`) que `EstadoApp` atiende tanto en arranque en frío como en caliente.
 

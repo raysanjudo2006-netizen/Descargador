@@ -111,8 +111,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.personal.descargador.compartir
         PRODUCT_NAME: DescargadorCompartir
-        # Para poder abrir la app contenedora (UIApplication.open). La app no va a la App Store.
-        APPLICATION_EXTENSION_API_ONLY: NO
+        # Xcode exige API solo de extensiones; la app se abre por el runtime de Objective-C
+        # (ver ControladorCompartir.abrirDescargador).
+        APPLICATION_EXTENSION_API_ONLY: YES
 
   # Tests unitarios de la lógica (se ejecutan en el simulador de GitHub Actions).
   DescargadorTests:

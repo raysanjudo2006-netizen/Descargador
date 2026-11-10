@@ -88,16 +88,18 @@ final class ControladorCompartir: UIViewController {
         return nil
     }
 
-    /// Las extensiones no tienen UIApplication.shared: se busca la aplicación en la cadena de
-    /// respondedores. En iOS 18 solo funciona open(_:options:completionHandler:); en versiones
-    /// anteriores se recurre también a openURL: si hiciera falta.
+    /// Las extensiones no pueden llamar a UIApplication.open (Xcode exige compilarlas solo con
+    /// API de extensiones). Se busca en la cadena de respondedores quien responda a
+    /// openURL:options:completionHandler: (la aplicación) y se le llama a través del runtime de
+    /// Objective-C. Es lo que funciona en iOS 18+; en versiones anteriores, openURL: como respaldo.
     private func abrirDescargador(_ enlace: URL) {
+        let selector = NSSelectorFromString("openURL:options:completionHandler:")
         var respondedor: UIResponder? = self
         while let actual = respondedor {
-            if let aplicacion = actual as? UIApplication {
-                aplicacion.open(enlace, options: [:]) { [weak self] abierta in
-                    if !abierta { self?.abrirConSelectorAntiguo(enlace) }
-                }
+            if actual.responds(to: selector), let implementacion = actual.method(for: selector) {
+                typealias Abrir = @convention(c) (AnyObject, Selector, NSURL, NSDictionary, AnyObject?) -> Void
+                let abrir = unsafeBitCast(implementacion, to: Abrir.self)
+                abrir(actual, selector, enlace as NSURL, NSDictionary(), nil)
                 return
             }
             respondedor = actual.next
