@@ -67,12 +67,29 @@ struct HistorialView: View {
     }
 }
 
+/// Miniaturas decodificadas una sola vez y fuera del hilo principal.
+private enum CacheMiniaturas {
+    private static let cache = NSCache<NSURL, UIImage>()
+
+    static func imagen(_ url: URL?) async -> UIImage? {
+        guard let url else { return nil }
+        if let guardada = cache.object(forKey: url as NSURL) { return guardada }
+        let imagen = await Task.detached(priority: .utility) { () -> UIImage? in
+            guard let foto = UIImage(contentsOfFile: url.path) else { return nil }
+            return foto.preparingForDisplay() ?? foto
+        }.value
+        if let imagen { cache.setObject(imagen, forKey: url as NSURL) }
+        return imagen
+    }
+}
+
 /// Miniatura, título y "Plataforma · tamaño · fecha".
 private struct FilaHistorial: View {
     let entrada: EntradaHistorial
     let miniatura: URL?
     let existe: Bool
     @ScaledMetric(relativeTo: .subheadline) private var alto: CGFloat = 44
+    @State private var foto: UIImage?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -98,11 +115,14 @@ private struct FilaHistorial: View {
         .padding(.vertical, 4)
         .opacity(existe ? 1 : 0.6)
         .accessibilityElement(children: .combine)
+        .task(id: miniatura) {
+            foto = await CacheMiniaturas.imagen(miniatura)
+        }
     }
 
     @ViewBuilder
     private var imagen: some View {
-        if let miniatura, let foto = UIImage(contentsOfFile: miniatura.path) {
+        if let foto {
             Image(uiImage: foto)
                 .resizable()
                 .scaledToFill()

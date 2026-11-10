@@ -31,7 +31,7 @@ final class EstadoAppTests: XCTestCase {
         let archivo = FileManager.default.temporaryDirectory
             .appendingPathComponent("estado-\(UUID().uuidString).jsonl")
         let registro = Registro(archivo: archivo)
-        return (EstadoApp(pestanaInicial: .ajustes, registro: registro, analizador: analizador), registro)
+        return (EstadoApp(pestanaInicial: .ajustes, registro: registro, analizador: analizador, buzon: BuzonEnlaces()), registro)
     }
 
     func test_calidadPredeterminadaSeAplicaSoloSiElEnlaceNoTraeCalidad() throws {
@@ -60,9 +60,30 @@ final class EstadoAppTests: XCTestCase {
         XCTAssertEqual(estado.textoEnlace, "https://youtu.be/otro", "Con la interfaz abierta llega al momento")
     }
 
+    func test_buzonGuardaElEnlaceSiElReceptorYaNoExiste() throws {
+        let buzon = BuzonEnlaces()
+        buzon.conectar { _ in false }  // su dueño ya no existe
+        let enlace = Enlaces.enlaceProfundo(para: try XCTUnwrap(URL(string: "https://youtu.be/abc")))
+        buzon.depositar(enlace)
+        var recibido: URL?
+        buzon.conectar { recibido = $0; return true }
+        XCTAssertEqual(recibido, enlace, "El enlace debe esperar al siguiente receptor")
+    }
+
+    func test_atajoSinCalidadUsaLaPredeterminada() async throws {
+        var recibido: URL?
+        BuzonEnlaces.compartido.conectar { recibido = $0; return true }
+        var accion = DescargarVideoIntent()
+        accion.enlace = "https://youtu.be/abc"
+        accion.calidad = nil
+        _ = try await accion.perform()
+        XCTAssertNil(try XCTUnwrap(recibido.flatMap(Enlaces.peticion(desde:))).calidad,
+                     "Sin calidad en el atajo, el enlace no la fija y manda la de Ajustes")
+    }
+
     func test_accionDeAtajosDejaElEnlaceEnElBuzon() async throws {
         var recibido: URL?
-        BuzonEnlaces.compartido.conectar { recibido = $0 }
+        BuzonEnlaces.compartido.conectar { recibido = $0; return true }
         var accion = DescargarVideoIntent()
         accion.enlace = "Mira esto https://vm.tiktok.com/ZMabc/ #fyp"
         accion.calidad = .audio

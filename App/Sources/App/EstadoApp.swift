@@ -88,7 +88,9 @@ final class EstadoApp: ObservableObject {
         self.calidadPorDefecto = calidadPorDefecto
         // Enlaces de Atajos: también los que llegaron antes de abrir la interfaz.
         buzon.conectar { [weak self] enlace in
-            self?.abrir(enlaceProfundo: enlace)
+            guard let self else { return false }
+            self.abrir(enlaceProfundo: enlace)
+            return true
         }
     }
 

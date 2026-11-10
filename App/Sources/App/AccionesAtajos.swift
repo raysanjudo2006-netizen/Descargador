@@ -38,11 +38,14 @@ struct DescargarVideoIntent: AppIntent {
     @Parameter(title: "Enlace", description: "Enlace del video, o el texto compartido que lo contiene")
     var enlace: String
 
-    @Parameter(title: "Calidad", default: .p720)
-    var calidad: CalidadAtajo
+    /// Opcional: si se deja vacía, se usa la de Ajustes (o se pregunta).
+    @Parameter(title: "Calidad", description: "Vacía = la elegida en Ajustes de Descargador")
+    var calidad: CalidadAtajo?
 
     static var parameterSummary: some ParameterSummary {
-        Summary("Descargar \(\.$enlace) en \(\.$calidad)")
+        Summary("Descargar \(\.$enlace)") {
+            \.$calidad
+        }
     }
 
     @MainActor
@@ -50,7 +53,7 @@ struct DescargarVideoIntent: AppIntent {
         guard let url = Enlaces.extraerPrimerEnlace(de: enlace) else {
             throw $enlace.needsValueError("No encontré un enlace. ¿Qué video quieres descargar?")
         }
-        BuzonEnlaces.compartido.depositar(Enlaces.enlaceProfundo(para: url, calidad: calidad.calidad))
+        BuzonEnlaces.compartido.depositar(Enlaces.enlaceProfundo(para: url, calidad: calidad?.calidad))
         return .result()
     }
 }

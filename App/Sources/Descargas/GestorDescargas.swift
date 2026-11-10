@@ -80,6 +80,7 @@ final class GestorDescargas: ObservableObject {
     func cancelar() {
         guard ocupado else { return }
         cancelacion.activar()
+        MotorJavaScript.cancelarEvaluaciones()  // por si está resolviendo un desafío de YouTube
         tarea?.cancel()
         registro.info("Cancelando descarga…", categoria: "descarga")
     }

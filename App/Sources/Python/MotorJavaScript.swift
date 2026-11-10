@@ -12,9 +12,55 @@ struct ErrorJavaScript: Error, Equatable {
 /// instalada así iOS no permite JIT, de modo que JavaScriptCore funciona en modo intérprete:
 /// tarda unos segundos por video, pero funciona en cualquier hilo y también en segundo plano.
 enum MotorJavaScript {
-    /// Ejecuta `script` en un contexto nuevo y devuelve la última línea escrita con
-    /// `console.log` (el solucionador de yt-dlp imprime ahí su resultado en JSON).
-    static func ejecutar(_ script: String) -> Result<String, ErrorJavaScript> {
+    private static let candado = NSLock()
+    private static var generacion = 0
+
+    /// Hace que las evaluaciones en curso dejen de esperarse (botón Cancelar de la descarga).
+    static func cancelarEvaluaciones() {
+        candado.lock(); generacion += 1; candado.unlock()
+    }
+
+    private static var generacionActual: Int {
+        candado.lock(); defer { candado.unlock() }
+        return generacion
+    }
+
+    /// Ejecuta `script` y devuelve la última línea escrita con `console.log` (el solucionador
+    /// de yt-dlp imprime ahí su resultado en JSON).
+    ///
+    /// JavaScriptCore no se puede interrumpir con la API pública: el script corre en su propio
+    /// hilo y aquí se espera como mucho `limite` segundos o hasta que se cancele. Así un desafío
+    /// colgado nunca bloquea la app (yt-dlp sigue, aunque con menos formatos).
+    static func ejecutar(_ script: String, limite: TimeInterval = 120) -> Result<String, ErrorJavaScript> {
+        let inicioGeneracion = generacionActual
+        let listo = DispatchSemaphore(value: 0)
+        let caja = CajaResultado()
+        let hilo = Thread {
+            caja.valor = ejecutarAhora(script)
+            listo.signal()
+        }
+        hilo.name = "JavaScriptCore"
+        hilo.stackSize = 16 << 20  // el solucionador recorre árboles de sintaxis muy profundos
+        hilo.start()
+
+        let fin = Date().addingTimeInterval(limite)
+        while listo.wait(timeout: .now() + 0.25) == .timedOut {
+            if generacionActual != inicioGeneracion {
+                return .failure(ErrorJavaScript(mensaje: "Cancelado"))
+            }
+            if Date() > fin {
+                return .failure(ErrorJavaScript(mensaje: "El desafío de YouTube tardó más de \(Int(limite)) s"))
+            }
+        }
+        return caja.valor
+    }
+
+    private final class CajaResultado {
+        var valor: Result<String, ErrorJavaScript> = .failure(ErrorJavaScript(mensaje: "Sin resultado"))
+    }
+
+    /// Ejecuta en el hilo actual, en un contexto nuevo.
+    private static func ejecutarAhora(_ script: String) -> Result<String, ErrorJavaScript> {
         guard let contexto = JSContext() else {
             return .failure(ErrorJavaScript(mensaje: "No se pudo crear el contexto de JavaScriptCore"))
         }

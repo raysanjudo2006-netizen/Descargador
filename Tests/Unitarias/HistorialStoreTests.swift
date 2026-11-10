@@ -71,6 +71,39 @@ final class HistorialStoreTests: XCTestCase {
         XCTAssertTrue(store(c).entradas.isEmpty)
     }
 
+    func test_nombreReutilizadoQuitaLaEntradaVieja() async throws {
+        let c = try carpetas()
+        let historial = store(c)
+        let video = c.archivos.appendingPathComponent("Video.mp4")
+        try await GeneradorMedios.video(segundos: 1, en: video)
+        await historial.agregar(ResultadoFinal(archivo: video, titulo: "Video", esAudio: false, enFotos: false, avisoFotos: nil),
+                                plataforma: .x, calidad: nil, enlace: enlace)
+        try FileManager.default.removeItem(at: video)  // borrado desde Archivos
+        try await GeneradorMedios.video(segundos: 1, en: video)  // otra descarga con el mismo título
+        await historial.agregar(ResultadoFinal(archivo: video, titulo: "Video", esAudio: false, enFotos: false, avisoFotos: nil),
+                                plataforma: .tiktok, calidad: nil, enlace: enlace)
+        XCTAssertEqual(historial.entradas.count, 1, "La entrada vieja ya no debe poder abrir ni borrar la nueva")
+        XCTAssertEqual(historial.entradas.first?.plataforma, .tiktok)
+    }
+
+    func test_jsonDanadoSeApartaYUnaEntradaMalaNoBorraLasDemas() throws {
+        let c = try carpetas()
+        try FileManager.default.createDirectory(at: c.json.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let fecha = ISO8601DateFormatter().string(from: Date())
+        let json = """
+        [{"id":"\(UUID().uuidString)","titulo":"Buena","plataforma":"youtube","nombreArchivo":"a.mp4","bytes":1,
+          "fecha":"\(fecha)","esAudio":false,"enlace":"https://youtu.be/a"},
+         {"id":"x","titulo":"Mala","plataforma":"desconocida"}]
+        """
+        try json.write(to: c.json, atomically: true, encoding: .utf8)
+        XCTAssertEqual(store(c).entradas.map(\.titulo), ["Buena"])
+
+        try "esto no es json".write(to: c.json, atomically: true, encoding: .utf8)
+        XCTAssertTrue(store(c).entradas.isEmpty)
+        let contenido = try FileManager.default.contentsOfDirectory(atPath: c.json.deletingLastPathComponent().path)
+        XCTAssertTrue(contenido.contains { $0.contains("danado") }, "El archivo dañado se aparta, no se pierde")
+    }
+
     func test_masNuevaPrimeroYVaciar() async throws {
         let c = try carpetas()
         let historial = store(c)

@@ -19,6 +19,15 @@ struct EntradaHistorial: Codable, Identifiable, Equatable {
     let enlace: String
 }
 
+/// Envoltorio para leer el historial entrada a entrada sin fallar por una dañada.
+private struct EntradaTolerante: Decodable {
+    let entrada: EntradaHistorial?
+
+    init(from decoder: Decoder) throws {
+        entrada = try? EntradaHistorial(from: decoder)
+    }
+}
+
 /// Historial de descargas (Application Support/historial.json), de la más nueva a la más vieja.
 @MainActor
 final class HistorialStore: ObservableObject {
@@ -39,7 +48,15 @@ final class HistorialStore: ObservableObject {
         self.carpetaArchivos = carpetaArchivos
         self.carpetaMiniaturas = carpetaMiniaturas
         if let datos = try? Data(contentsOf: archivo) {
-            entradas = (try? Self.decodificador.decode([EntradaHistorial].self, from: datos)) ?? []
+            if let tolerantes = try? Self.decodificador.decode([EntradaTolerante].self, from: datos) {
+                // Una entrada dañada no se lleva por delante a las demás.
+                entradas = tolerantes.compactMap(\.entrada)
+            } else {
+                // Archivo ilegible: se aparta (no se sobrescribe) y se empieza de cero.
+                let copia = archivo.deletingPathExtension()
+                    .appendingPathExtension("danado-\(Int(Date().timeIntervalSince1970)).json")
+                try? FileManager.default.moveItem(at: archivo, to: copia)
+            }
         }
     }
 
@@ -77,6 +94,9 @@ final class HistorialStore: ObservableObject {
                                        nombreMiniatura: nombreMiniatura, bytes: bytes, fecha: Date(),
                                        esAudio: resultado.esAudio, calidad: calidad?.rawValue,
                                        enlace: enlace.absoluteString)
+        // Si una entrada vieja apuntaba a un archivo ya borrado con el mismo nombre, ese nombre
+        // ahora es de esta descarga: la vieja se quita para que nunca abra ni borre la nueva.
+        entradas.removeAll { $0.nombreArchivo == entrada.nombreArchivo }
         entradas.insert(entrada, at: 0)
         guardar()
     }

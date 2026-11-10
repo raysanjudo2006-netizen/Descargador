@@ -70,10 +70,22 @@ class TestPuenteSinYtDlp(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cookies = pathlib.Path(tmp) / "cookies.txt"
             cookies.write_text("# Netscape HTTP Cookie File", encoding="utf-8")
-            con = puente._opciones_comunes({"cookies": str(cookies)}, registro)
-            sin = puente._opciones_comunes({"cookies": str(pathlib.Path(tmp) / "no-existe.txt")}, registro)
+            con = puente._opciones_comunes({}, registro, cookies=str(cookies))
+            sin = puente._opciones_comunes({}, registro, cookies=str(pathlib.Path(tmp) / "no-existe.txt"))
         self.assertEqual(con["cookiefile"], str(cookies))
         self.assertNotIn("cookiefile", sin)
+
+    def test_copiaDeCookiesNoTocaElOriginal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            original = pathlib.Path(tmp) / "cookies.txt"
+            original.write_text("original", encoding="utf-8")
+            with puente._CopiaCookies({"cookies": str(original)}) as copia:
+                self.assertNotEqual(copia, str(original))
+                pathlib.Path(copia).write_text("reescrita por yt-dlp", encoding="utf-8")
+            self.assertEqual(original.read_text(encoding="utf-8"), "original")
+            self.assertFalse(pathlib.Path(copia).exists(), "La copia se borra al terminar")
+        with puente._CopiaCookies({}) as sin_cookies:
+            self.assertIsNone(sin_cookies)
 
     def test_peticionInvalidaDevuelveErrorJson(self):
         r = json.loads(puente.info("esto no es json", 0, 0))

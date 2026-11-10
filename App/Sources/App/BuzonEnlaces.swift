@@ -10,21 +10,21 @@ final class BuzonEnlaces {
     static let compartido = BuzonEnlaces()
 
     private var pendiente: URL?
-    private var receptor: ((URL) -> Void)?
+    /// Devuelve false si ya no puede recibir (por ejemplo, su dueño desapareció).
+    private var receptor: ((URL) -> Bool)?
 
     func depositar(_ enlace: URL) {
-        if let receptor {
-            receptor(enlace)
-        } else {
-            pendiente = enlace
+        if let receptor, receptor(enlace) {
+            return
         }
+        receptor = nil
+        pendiente = enlace
     }
 
-    func conectar(_ receptor: @escaping (URL) -> Void) {
+    func conectar(_ receptor: @escaping (URL) -> Bool) {
         self.receptor = receptor
-        if let pendiente {
+        if let pendiente, receptor(pendiente) {
             self.pendiente = nil
-            receptor(pendiente)
         }
     }
 }

@@ -52,7 +52,7 @@ enum Cookies {
         let cantidad = contar(texto)
         guard cantidad > 0 else { throw ErrorCookies.formatoNoValido }
         try FileManager.default.createDirectory(at: destino.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data(texto.utf8).write(to: destino, options: [.atomic, .completeFileProtection])
+        try Data(texto.utf8).write(to: destino, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         return cantidad
     }
 

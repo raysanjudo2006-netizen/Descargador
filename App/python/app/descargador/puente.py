@@ -16,6 +16,9 @@ import json
 import os
 import platform
 import re
+import shutil
+import tempfile
+import threading
 import time
 import traceback
 import zipfile
@@ -30,20 +33,59 @@ TIPO_CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p, ctypes.c_void_p)
 _ANALISIS_RECIENTES: dict = {}
 _VIGENCIA_ANALISIS = 30 * 60
 _MAXIMO_ANALISIS = 5
+# info y descargar corren en hilos distintos: el diccionario se toca siempre con el candado.
+_CANDADO_ANALISIS = threading.Lock()
 
 
-def _guardar_analisis(url: str, info: dict):
-    _ANALISIS_RECIENTES[url] = (time.monotonic(), info)
-    while len(_ANALISIS_RECIENTES) > _MAXIMO_ANALISIS:
-        mas_viejo = min(_ANALISIS_RECIENTES, key=lambda clave: _ANALISIS_RECIENTES[clave][0])
-        del _ANALISIS_RECIENTES[mas_viejo]
+def _clave_analisis(peticion: dict) -> str:
+    """URL + cookies (ruta y fecha): si importas cookies nuevas, se vuelve a analizar."""
+    cookies = peticion.get("cookies") or ""
+    fecha = os.path.getmtime(cookies) if cookies and os.path.isfile(cookies) else 0
+    return f"{peticion['url']}|{cookies}|{fecha}"
 
 
-def _analisis_reciente(url: str):
-    guardado = _ANALISIS_RECIENTES.get(url)
+def _guardar_analisis(clave: str, info: dict):
+    with _CANDADO_ANALISIS:
+        _ANALISIS_RECIENTES[clave] = (time.monotonic(), info)
+        while len(_ANALISIS_RECIENTES) > _MAXIMO_ANALISIS:
+            mas_viejo = min(_ANALISIS_RECIENTES, key=lambda c: _ANALISIS_RECIENTES[c][0])
+            del _ANALISIS_RECIENTES[mas_viejo]
+
+
+def _analisis_reciente(clave: str):
+    with _CANDADO_ANALISIS:
+        guardado = _ANALISIS_RECIENTES.get(clave)
     if guardado and time.monotonic() - guardado[0] < _VIGENCIA_ANALISIS:
         return copy.deepcopy(guardado[1])
     return None
+
+
+def _olvidar_analisis(clave: str):
+    with _CANDADO_ANALISIS:
+        _ANALISIS_RECIENTES.pop(clave, None)
+
+
+class _CopiaCookies:
+    """yt-dlp reescribe el archivo de cookies al cerrar: se le da una copia por llamada para que
+    el cookies.txt importado nunca se modifique ni lo lean dos hilos a la vez."""
+
+    def __init__(self, peticion: dict):
+        self.ruta = None
+        original = peticion.get("cookies")
+        if original and os.path.isfile(original):
+            descriptor, self.ruta = tempfile.mkstemp(prefix="cookies-", suffix=".txt")
+            os.close(descriptor)
+            shutil.copyfile(original, self.ruta)
+
+    def __enter__(self):
+        return self.ruta
+
+    def __exit__(self, *_):
+        if self.ruta:
+            try:
+                os.remove(self.ruta)
+            except OSError:
+                pass
 
 
 class Emisor:
@@ -199,8 +241,11 @@ def _miniatura(info: dict):
     return miniaturas[-1]["url"] if miniaturas else None
 
 
-def _opciones_comunes(peticion: dict, registro: _RegistroYtDlp) -> dict:
-    """Opciones de YoutubeDL compartidas por info y descargar."""
+def _opciones_comunes(peticion: dict, registro: _RegistroYtDlp, cookies: "str | None" = None) -> dict:
+    """Opciones de YoutubeDL compartidas por info y descargar.
+
+    `cookies`: ruta de la COPIA de cookies de esta llamada (ver _CopiaCookies).
+    """
     opciones = {
         "logger": registro,
         "quiet": True,
@@ -213,7 +258,6 @@ def _opciones_comunes(peticion: dict, registro: _RegistroYtDlp) -> dict:
         "enable_file_urls": bool(peticion.get("permitir_archivos")),
     }
     # Cookies del usuario (cookies.txt importado en Ajustes) para videos que piden su sesión.
-    cookies = peticion.get("cookies")
     if cookies and os.path.isfile(cookies):
         opciones["cookiefile"] = cookies
     return opciones
@@ -241,10 +285,11 @@ def info(peticion: dict, emisor: Emisor) -> dict:
     import yt_dlp
 
     registro = _RegistroYtDlp(emisor)
-    with yt_dlp.YoutubeDL(dict(_opciones_comunes(peticion, registro), skip_download=True)) as ydl:
-        bruto = _primera_entrada(ydl.extract_info(peticion["url"], download=False), registro)
-        datos = ydl.sanitize_info(bruto)
-    _guardar_analisis(peticion["url"], bruto)
+    with _CopiaCookies(peticion) as cookies:
+        with yt_dlp.YoutubeDL(dict(_opciones_comunes(peticion, registro, cookies), skip_download=True)) as ydl:
+            bruto = _primera_entrada(ydl.extract_info(peticion["url"], download=False), registro)
+            datos = ydl.sanitize_info(bruto)
+    _guardar_analisis(_clave_analisis(peticion), bruto)
 
     return {
         "id": datos.get("id"),
@@ -310,15 +355,27 @@ def descargar(peticion: dict, emisor: Emisor) -> dict:
     registro = _RegistroYtDlp(emisor, cancelacion)
     carpeta = peticion["carpeta"]
     os.makedirs(carpeta, exist_ok=True)
-    comunes = _opciones_comunes(peticion, registro)
+    clave = _clave_analisis(peticion)
+    with _CopiaCookies(peticion) as cookies:
+        try:
+            return _descargar_partes(peticion, emisor, registro, cancelacion, carpeta, clave,
+                                     _opciones_comunes(peticion, registro, cookies))
+        except Exception:
+            # Si falla (enlace caducado, 403, cambio de red…), el próximo intento vuelve a analizar.
+            _olvidar_analisis(clave)
+            raise
+
+
+def _descargar_partes(peticion, emisor, registro, cancelacion, carpeta, clave, comunes) -> dict:
+    import yt_dlp
 
     # Se analiza una vez (o se reutiliza el análisis reciente) y cada parte se descarga
     # sobre una copia de ese resultado.
-    datos = _analisis_reciente(peticion["url"])
+    datos = _analisis_reciente(clave)
     if datos is None:
         with yt_dlp.YoutubeDL(dict(comunes, skip_download=True)) as ydl:
             datos = _primera_entrada(ydl.extract_info(peticion["url"], download=False), registro)
-        _guardar_analisis(peticion["url"], datos)
+        _guardar_analisis(clave, datos)
     else:
         emisor.log("info", "Se reutiliza el análisis reciente del enlace")
 
