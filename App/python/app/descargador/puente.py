@@ -24,6 +24,27 @@ from . import errores, seleccion
 
 TIPO_CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p, ctypes.c_void_p)
 
+# Últimos análisis {url: (momento, info)}: descargar los reutiliza para no volver a extraer
+# (en YouTube eso evita resolver otra vez el desafío JavaScript). Los enlaces de los
+# formatos duran horas; se reutilizan como mucho 30 minutos.
+_ANALISIS_RECIENTES: dict = {}
+_VIGENCIA_ANALISIS = 30 * 60
+_MAXIMO_ANALISIS = 5
+
+
+def _guardar_analisis(url: str, info: dict):
+    _ANALISIS_RECIENTES[url] = (time.monotonic(), info)
+    while len(_ANALISIS_RECIENTES) > _MAXIMO_ANALISIS:
+        mas_viejo = min(_ANALISIS_RECIENTES, key=lambda clave: _ANALISIS_RECIENTES[clave][0])
+        del _ANALISIS_RECIENTES[mas_viejo]
+
+
+def _analisis_reciente(url: str):
+    guardado = _ANALISIS_RECIENTES.get(url)
+    if guardado and time.monotonic() - guardado[0] < _VIGENCIA_ANALISIS:
+        return copy.deepcopy(guardado[1])
+    return None
+
 
 class Emisor:
     """Envía eventos JSON a Swift por el callback C."""
@@ -216,8 +237,9 @@ def info(peticion: dict, emisor: Emisor) -> dict:
 
     registro = _RegistroYtDlp(emisor)
     with yt_dlp.YoutubeDL(dict(_opciones_comunes(peticion, registro), skip_download=True)) as ydl:
-        datos = ydl.sanitize_info(ydl.extract_info(peticion["url"], download=False))
-    datos = _primera_entrada(datos, registro)
+        bruto = _primera_entrada(ydl.extract_info(peticion["url"], download=False), registro)
+        datos = ydl.sanitize_info(bruto)
+    _guardar_analisis(peticion["url"], bruto)
 
     return {
         "id": datos.get("id"),
@@ -285,9 +307,15 @@ def descargar(peticion: dict, emisor: Emisor) -> dict:
     os.makedirs(carpeta, exist_ok=True)
     comunes = _opciones_comunes(peticion, registro)
 
-    # Se analiza una vez y cada parte se descarga sobre una copia de ese resultado.
-    with yt_dlp.YoutubeDL(dict(comunes, skip_download=True)) as ydl:
-        datos = _primera_entrada(ydl.extract_info(peticion["url"], download=False), registro)
+    # Se analiza una vez (o se reutiliza el análisis reciente) y cada parte se descarga
+    # sobre una copia de ese resultado.
+    datos = _analisis_reciente(peticion["url"])
+    if datos is None:
+        with yt_dlp.YoutubeDL(dict(comunes, skip_download=True)) as ydl:
+            datos = _primera_entrada(ydl.extract_info(peticion["url"], download=False), registro)
+        _guardar_analisis(peticion["url"], datos)
+    else:
+        emisor.log("info", "Se reutiliza el análisis reciente del enlace")
 
     archivos = {}
     for parte in peticion["partes"]:
@@ -337,3 +365,29 @@ def inspeccionar_paquete(peticion: dict, emisor: Emisor) -> dict:
     if not version:
         raise ValueError("No se encontró la versión de yt-dlp")
     return {"yt_dlp": version.group(1), "ejs": ejs.group(1) if ejs else None, "incluye_ejs": incluye_ejs}
+
+
+@_expuesta
+def configurar_js(peticion: dict, emisor: Emisor) -> dict:
+    """Recibe de Swift el evaluador de JavaScriptCore y registra el proveedor de YouTube.
+
+    Petición: {"evaluador": dirección de la función C}.
+    """
+    from . import jsc
+
+    resultado = jsc.configurar(int(peticion.get("evaluador") or 0))
+    if resultado["registrado"]:
+        emisor.log("info", "Desafíos de YouTube: JavaScriptCore listo")
+    else:
+        emisor.log("aviso", f"No se pudo registrar JavaScriptCore en yt-dlp: {resultado['error']}")
+    return resultado
+
+
+@_expuesta
+def probar_js(peticion: dict, emisor: Emisor) -> dict:
+    """Ejecuta un script en JavaScriptCore pasando por todo el puente (para los tests)."""
+    from . import jsc
+
+    inicio = time.monotonic()
+    salida = jsc.evaluar(peticion["script"])
+    return {"salida": salida, "segundos": round(time.monotonic() - inicio, 3)}

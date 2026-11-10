@@ -26,6 +26,12 @@ struct ResultadoDescargaPython: Decodable, Equatable {
     let id: String?
 }
 
+/// Respuesta de descargador.puente.probar_js.
+struct PruebaJavaScript: Decodable, Equatable {
+    let salida: String
+    let segundos: Double
+}
+
 /// Respuesta de descargador.puente.inspeccionar_paquete.
 struct PaqueteYtDlp: Decodable, Equatable {
     let ytDlp: String

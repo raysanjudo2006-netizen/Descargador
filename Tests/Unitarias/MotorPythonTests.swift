@@ -37,6 +37,23 @@ final class MotorPythonTests: XCTestCase {
         }
     }
 
+    /// Python → C → Swift → JavaScriptCore → Python: el camino que usa yt-dlp para YouTube.
+    func test_javaScriptDesdePython() async throws {
+        let prueba = try await MotorPython.compartido.probarJavaScript("console.log([1, 2, 3].map(x => x * 2).join('-'))")
+        XCTAssertEqual(prueba.salida, "2-4-6")
+    }
+
+    func test_errorDeJavaScriptLlegaComoErrorMotor() async {
+        do {
+            _ = try await MotorPython.compartido.probarJavaScript("throw new Error('roto')")
+            XCTFail("Debería fallar")
+        } catch let error as ErrorMotor {
+            XCTAssertTrue(error.mensaje.contains("roto"), error.mensaje)
+        } catch {
+            XCTFail("Error inesperado: \(error)")
+        }
+    }
+
     func test_llamadasEnParalelo() async throws {
         async let a = MotorPython.compartido.version()
         async let b = MotorPython.compartido.version()

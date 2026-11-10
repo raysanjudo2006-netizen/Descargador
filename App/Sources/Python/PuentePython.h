@@ -25,4 +25,15 @@ char *dp_llamar(const char *funcion, const char *peticion_json, dp_callback call
 /// Libera un texto devuelto por dp_llamar.
 void dp_liberar(char *texto);
 
+/// Python llama a esta función para entregar un texto (resultado o error) a quien lo pidió.
+typedef void (*dp_respuesta)(const char *texto, void *contexto_respuesta);
+
+/// Evaluador de JavaScript que Swift ofrece a Python (JavaScriptCore), para los desafíos de
+/// YouTube. Ejecuta `script` y entrega por `responder` lo que imprimió con console.log
+/// (devuelve 0) o el error (devuelve 1).
+typedef int (*dp_evaluador_js)(const char *script, dp_respuesta responder, void *contexto_respuesta);
+
+/// Dirección numérica de un evaluador, para pasársela a Python (ctypes la convierte en función).
+unsigned long long dp_direccion_evaluador(dp_evaluador_js evaluador);
+
 #endif

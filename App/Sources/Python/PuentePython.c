@@ -179,3 +179,7 @@ char *dp_llamar(const char *funcion, const char *peticion_json, dp_callback call
 void dp_liberar(char *texto) {
     free(texto);
 }
+
+unsigned long long dp_direccion_evaluador(dp_evaluador_js evaluador) {
+    return (unsigned long long)(uintptr_t)evaluador;
+}

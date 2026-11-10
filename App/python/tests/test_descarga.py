@@ -40,6 +40,20 @@ class TestDescargar(unittest.TestCase):
         self.assertEqual(progreso[-1]["parte"], "video")
         self.assertEqual(progreso[-1]["descargado"], 500_000)
 
+    def test_descargaReutilizaElAnalisisReciente(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            archivo = pathlib.Path(tmp) / "reutilizado.mp4"
+            archivo.write_bytes(b"\x01" * 1000)
+            peticion = self._peticion(tmp, archivo)
+            analisis = json.loads(puente.info(json.dumps(peticion), 0, 0))
+            self.assertTrue(analisis["ok"], analisis)
+            recolector = Recolector()
+            r = json.loads(puente.descargar(json.dumps(peticion), recolector.direccion, 0))
+        self.assertTrue(r["ok"], r)
+        mensajes = [e.get("mensaje", "") for e in recolector.eventos if e["tipo"] == "log"]
+        self.assertTrue(any("reutiliza" in m for m in mensajes), mensajes)
+        self.assertFalse(any("Extracting URL" in m for m in mensajes), "No debería volver a extraer")
+
     def test_descargaCancelada(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             archivo = pathlib.Path(tmp) / "muestra.mp4"

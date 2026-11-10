@@ -56,6 +56,12 @@ final class MotorPython: AnalizadorVideo {
         ], eventos: ManejadorEventos(alProgreso: alProgreso, cancelado: cancelado))
     }
 
+    /// Ejecuta JavaScript pasando por todo el camino Python → C → Swift → JavaScriptCore
+    /// (para comprobar en los tests que yt-dlp podrá resolver los desafíos de YouTube).
+    func probarJavaScript(_ script: String) async throws -> PruebaJavaScript {
+        try await llamar("probar_js", ["script": script])
+    }
+
     /// Lee la versión de yt-dlp (y la de yt-dlp-ejs que exige) de un zipapp o wheel descargado.
     func inspeccionarPaquete(_ archivo: URL) async throws -> PaqueteYtDlp {
         try await llamar("inspeccionar_paquete", ["ruta": archivo.path])
@@ -147,10 +153,21 @@ final class MotorPython: AnalizadorVideo {
         switch resultado {
         case .success:
             registro.info("Python iniciado", categoria: "python")
+            configurarJavaScript()
         case .failure(let error):
             registro.error(error.mensaje, categoria: "python")
         }
         try resultado.get()
+    }
+
+    /// Da a yt-dlp el motor JavaScriptCore para los desafíos de YouTube (ver descargador/jsc.py).
+    /// Se llama una vez, justo después de arrancar Python y antes de cualquier análisis.
+    private func configurarJavaScript() {
+        let direccion = Int(truncatingIfNeeded: dp_direccion_evaluador(evaluadorJavaScript))
+        let respuesta = llamarSincrono("configurar_js", #"{"evaluador": \#(direccion)}"#, nil)
+        if !respuesta.contains(#""registrado": true"#) {
+            registro.aviso("JavaScriptCore no quedó registrado en yt-dlp: \(respuesta.prefix(300))", categoria: "python")
+        }
     }
 
     /// Inicializa Python en un hilo que se queda dormido para siempre.

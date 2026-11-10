@@ -4,17 +4,17 @@ App de iOS para uso personal que descarga videos de YouTube, Instagram, TikTok, 
 directamente en el iPhone, sin servidor. Se compila gratis en GitHub Actions y se instala con
 SideStore (o AltStore) usando un Apple ID gratuito.
 
-> **Estado: Etapa 3 de 5.** La app analiza el enlace con yt-dlp (Python dentro de la app),
+> **Estado: Etapa 4 de 5.** La app analiza el enlace con yt-dlp (Python dentro de la app),
 > descarga con progreso real, une audio y video sin ffmpeg y guarda el video en Fotos o el audio
-> en Archivos. yt-dlp se actualiza desde Ajustes sin reinstalar. YouTube completo llega en la
-> Etapa 4.
+> en Archivos. YouTube funciona completo: los desafíos JavaScript se resuelven con
+> JavaScriptCore, el motor de iOS. yt-dlp se actualiza desde Ajustes sin reinstalar.
 
 | Etapa | Contenido | Estado |
 |---|---|---|
 | 1 | Esqueleto SwiftUI + compilación en GitHub Actions + pruebas en simulador | ✅ |
 | 2 | Python + yt-dlp dentro de la app (analizar enlaces) | ✅ |
 | 3 | Descarga con progreso real, unión de audio y video, Fotos/Archivos, actualizar yt-dlp | 🧪 en pruebas |
-| 4 | YouTube (motor JavaScript) | ⏳ |
+| 4 | YouTube (desafíos JavaScript con JavaScriptCore) | 🧪 en pruebas |
 | 5 | Share Extension, acción de Atajos, historial | ⏳ |
 
 ---
@@ -241,7 +241,18 @@ dímelo.
 
 ## 6. Qué probar en cada etapa y qué enviarme
 
-### Etapa 3 (actual): descargar, unir y guardar
+### Etapa 4: YouTube
+
+1. Analiza un enlace de YouTube (`youtube.com/watch?v=…`, `youtu.be/…` o un Short). Deben salir
+   las calidades hasta 1080p (en YouTube, "Mejor" es como mucho 1080p: el 4K solo existe en
+   formatos que Fotos no acepta sin recodificar).
+2. En **Registro** debe aparecer "Desafío de YouTube resuelto con JavaScriptCore en X s". La
+   primera vez tarda unos segundos: iOS no deja usar el modo rápido (JIT) a apps instaladas así.
+3. Descarga en 720p y comprueba en Fotos que tiene sonido (YouTube manda video y audio separados:
+   verás "Uniendo audio y video").
+4. Si YouTube responde "confirma que no eres un robot", la solución son tus cookies (Etapa 5).
+
+### Etapa 3: descargar, unir y guardar
 
 1. **Instalar:** etiqueta `v0.3.0` (apartado 2) e instálalo con iloader.
 2. **Descargar video:** analiza un enlace de TikTok, X o Instagram y **toca una calidad**. Debe
