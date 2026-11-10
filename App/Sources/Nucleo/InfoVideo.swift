@@ -23,6 +23,26 @@ struct InfoVideo: Decodable, Equatable {
     func opcion(_ calidad: Calidad) -> OpcionCalidad? {
         opciones.first { $0.calidad == calidad.rawValue }
     }
+
+    /// La opción disponible para `calidad`; si no existe para este video, la más cercana por
+    /// debajo y, si tampoco, "Mejor". Para "Solo audio" no hay alternativa.
+    func opcionMasCercana(a calidad: Calidad) -> OpcionCalidad? {
+        if let exacta = opcion(calidad), exacta.disponible {
+            return exacta
+        }
+        guard calidad != .audio else { return nil }
+        let orden: [Calidad] = [.p1080, .p720, .p480, .p360]
+        let inicio = orden.firstIndex(of: calidad) ?? 0
+        for candidata in orden[inicio...] {
+            if let opcion = opcion(candidata), opcion.disponible {
+                return opcion
+            }
+        }
+        if let mejor = opcion(.mejor), mejor.disponible {
+            return mejor
+        }
+        return nil
+    }
 }
 
 /// Qué se descargaría para una calidad (ver descargador/seleccion.py).

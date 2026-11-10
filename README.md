@@ -4,10 +4,11 @@ App de iOS para uso personal que descarga videos de YouTube, Instagram, TikTok, 
 directamente en el iPhone, sin servidor. Se compila gratis en GitHub Actions y se instala con
 SideStore (o AltStore) usando un Apple ID gratuito.
 
-> **Estado: Etapa 4 de 5.** La app analiza el enlace con yt-dlp (Python dentro de la app),
+> **Estado: las 5 etapas están hechas (pendientes de probar en el iPhone).** La app analiza el enlace con yt-dlp (Python dentro de la app),
 > descarga con progreso real, une audio y video sin ffmpeg y guarda el video en Fotos o el audio
 > en Archivos. YouTube funciona completo: los desafíos JavaScript se resuelven con
-> JavaScriptCore, el motor de iOS. yt-dlp se actualiza desde Ajustes sin reinstalar.
+> JavaScriptCore, el motor de iOS. yt-dlp se actualiza desde Ajustes sin reinstalar. Además:
+> historial, Descargador en el botón Compartir, acción "Descargar video" en Atajos y cookies.
 
 | Etapa | Contenido | Estado |
 |---|---|---|
@@ -15,7 +16,7 @@ SideStore (o AltStore) usando un Apple ID gratuito.
 | 2 | Python + yt-dlp dentro de la app (analizar enlaces) | ✅ |
 | 3 | Descarga con progreso real, unión de audio y video, Fotos/Archivos, actualizar yt-dlp | 🧪 en pruebas |
 | 4 | YouTube (desafíos JavaScript con JavaScriptCore) | 🧪 en pruebas |
-| 5 | Share Extension, acción de Atajos, historial | ⏳ |
+| 5 | Compartir (Share Extension), acción de Atajos, historial, cookies, calidad predeterminada | 🧪 en pruebas |
 
 ---
 
@@ -177,25 +178,55 @@ AltStore necesita el PC encendido con AltServer en la misma Wi-Fi para renovar.
 8. Renovar: con AltServer abierto en el PC y la misma Wi-Fi, AltStore → **Mis apps** →
    **Actualizar todo**.
 
-## 4. Atajos (app Atajos de iOS)
+## 4. Compartir y Atajos
 
-La acción nativa "Descargar video" llega en la Etapa 5. Mientras tanto, la app ya responde al
-enlace `descargador://download?url=…`, y con eso basta para un atajo que aparece en el botón
-Compartir:
+### Descargador en el botón Compartir
 
-1. Abre **Atajos** → **+** → nombre: *Descargar video*.
-2. Toca el icono de información (ⓘ) → activa **Mostrar en la hoja para compartir** y deja que
-   reciba **URL** y **Texto**.
-3. Añade estas acciones en orden:
-   1. **Codificar URL** (*URL Encode*) → entrada: *Entrada del atajo*.
-   2. **Texto** → escribe `descargador://download?url=` y, justo detrás, inserta la variable
-      *Texto codificado*. Opcional: añade `&calidad=720` al final (valores: `mejor`, `1080`,
-      `720`, `480`, `360`, `audio`): con calidad, la descarga empieza sola al terminar el análisis.
-   3. **Abrir URLs** → con el *Texto* anterior.
-4. Pruébalo: en YouTube o TikTok pulsa **Compartir › Descargar video**.
+En YouTube, TikTok, Instagram, X o Safari pulsa **Compartir** y elige **Descargador** en la fila
+de apps. Si no aparece, desliza esa fila hasta el final → **Más** → activa Descargador (y
+arrástralo arriba). La app se abre con el enlace, lo analiza y:
 
-Prueba rápida sin atajo: escribe en la barra de Safari
-`descargador://download?url=https://youtu.be/dQw4w9WgXcQ&calidad=720`.
+- si en **Ajustes › Calidad para Compartir y Atajos** elegiste una calidad, descarga sola;
+- si está en "Preguntar", te deja elegir la calidad.
+
+En Instagram y TikTok a veces hay que tocar primero **Compartir en…** o **Más** para que salga la
+hoja de Compartir de iOS.
+
+> Con la cuenta gratuita, la extensión gasta un App ID más al instalar con iloader (tienes 10
+> por semana). Si iloader da error de límite de App IDs, espera unos días o avísame.
+
+### Acción "Descargar video" en Atajos
+
+1. **Atajos** → **+** → busca la acción **Descargar video** (de Descargador).
+2. **Enlace**: toca y elige *Entrada del atajo*. **Calidad**: la que quieras.
+3. Toca ⓘ → activa **Mostrar en la hoja para compartir** (recibe URL y Texto).
+4. Ya aparece en Compartir como *Descargar video*. También con Siri: "Descargar video con
+   Descargador".
+
+El enlace `descargador://download?url=…&calidad=720` sigue funcionando (desde Safari o con
+"Abrir URLs" en un atajo). La app acepta también el texto compartido entero de TikTok o
+Instagram y busca el enlace dentro.
+
+## Historial
+
+La pestaña **Historial** guarda cada descarga con su miniatura, título, plataforma, tamaño y
+fecha. Toca para reproducir; desliza a la izquierda para borrar; mantén pulsado para compartir.
+Borrar quita la copia de la app, no la de Fotos.
+
+## Cookies (opcional)
+
+Solo hacen falta si un video pide tu sesión: privado, con restricción de edad, o cuando YouTube
+dice "confirma que no eres un robot".
+
+1. En el navegador del PC, con tu cuenta abierta en la web (por ejemplo youtube.com), exporta las
+   cookies con una extensión como **Get cookies.txt LOCALLY** (formato Netscape, `cookies.txt`).
+2. Pásalo al iPhone sin iCloud: conecta el iPhone por cable, abre **iTunes** → tu iPhone →
+   **Compartir archivos** → **Descargador** → arrastra `cookies.txt` a la lista.
+3. En la app: **Ajustes › Cookies › Importar cookies.txt** → En mi iPhone › Descargador.
+4. Para quitarlas: **Ajustes › Cookies › Borrar cookies**.
+
+Las cookies son como tu contraseña: se guardan solo dentro de la app, nunca en el Registro, y no
+debes compartirlas. Borra el `cookies.txt` del PC cuando termines.
 
 ## 5. Solución de problemas
 
@@ -240,6 +271,18 @@ dímelo.
    copia todo junto.
 
 ## 6. Qué probar en cada etapa y qué enviarme
+
+### Etapa 5: Compartir, Atajos, historial y cookies
+
+1. **Compartir:** en YouTube o TikTok, **Compartir › Descargador**. Se abre la app con el enlace.
+2. **Calidad predeterminada:** Ajustes › *Calidad para Compartir y Atajos* → 720p. Repite el
+   paso 1: ahora debe descargar solo.
+3. **Atajos:** crea el atajo con la acción **Descargar video** (apartado 4) y úsalo desde
+   Compartir.
+4. **Historial:** las descargas anteriores aparecen con miniatura; prueba reproducir, compartir
+   y borrar.
+5. **Cookies (si hace falta):** importa un `cookies.txt` y analiza un video que antes pedía
+   iniciar sesión.
 
 ### Etapa 4: YouTube
 
@@ -309,9 +352,15 @@ Registro. Probado en el iPhone el 9 de noviembre de 2026.
 ## Estructura del proyecto
 
 ```text
-App/Sources/App/         Arranque, estado global, datos de la compilación
-App/Sources/Nucleo/      Lógica sin interfaz: enlaces, plataformas, calidades, registro
+App/Sources/App/         Arranque, estado global, acción de Atajos, buzón de enlaces
+App/Sources/Nucleo/      Lógica sin interfaz: enlaces, calidades, registro, cookies, formatos
+App/Sources/Python/      Puente C con Python, MotorPython, JavaScriptCore, actualizar yt-dlp
+App/Sources/Descargas/   Gestor de descargas y segundo plano
+App/Sources/Medios/      Unir/extraer con AVFoundation y guardar en Fotos/Archivos
+App/Sources/Historial/   Historial de descargas
 App/Sources/Pantallas/   Vistas SwiftUI (Descargar, Historial, Ajustes, Registro)
+App/python/app/          Código Python propio (puente con yt-dlp, selección de formatos)
+ShareExtension/          Descargador en el botón Compartir
 App/Resources/           Icono y color de acento
 Tests/Unitarias/         Tests de la lógica
 Tests/UI/                Recorrido de la app con capturas

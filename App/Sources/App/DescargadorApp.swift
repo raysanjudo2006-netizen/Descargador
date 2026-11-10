@@ -9,13 +9,17 @@ import SwiftUI
 @main
 struct DescargadorApp: App {
     @StateObject private var estado: EstadoApp
-    @StateObject private var gestor = GestorDescargas()
+    @StateObject private var historial: HistorialStore
+    @StateObject private var gestor: GestorDescargas
     @AppStorage("apariencia") private var apariencia: Apariencia = .sistema
 
     init() {
         let inicial = UserDefaults.standard.string(forKey: "pestanaInicial")
             .flatMap(Pestana.init(rawValue:)) ?? .descargar
         _estado = StateObject(wrappedValue: EstadoApp(pestanaInicial: inicial))
+        let historial = HistorialStore()
+        _historial = StateObject(wrappedValue: historial)
+        _gestor = StateObject(wrappedValue: GestorDescargas(historial: historial))
         Registro.compartido.info("Inicio · \(InfoBuild.resumen)")
     }
 
@@ -24,6 +28,7 @@ struct DescargadorApp: App {
             PestanasView()
                 .environmentObject(estado)
                 .environmentObject(gestor)
+                .environmentObject(historial)
                 .environmentObject(Registro.compartido)
                 .preferredColorScheme(apariencia.esquema)
                 .onOpenURL { url in

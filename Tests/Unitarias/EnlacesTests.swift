@@ -86,6 +86,22 @@ final class EnlacesTests: XCTestCase {
         XCTAssertEqual(p?.calidad, .p720)
     }
 
+    func test_enlaceProfundoIdaYVuelta() throws {
+        let originales = [
+            "https://www.youtube.com/watch?v=abc&t=10#comentarios",
+            "https://vm.tiktok.com/ZMabc/",
+            "https://x.com/u/status/1?s=20&t=xyz",
+        ]
+        for texto in originales {
+            let url = try XCTUnwrap(URL(string: texto))
+            for calidad in [nil, Calidad.p720, .audio] {
+                let profundo = Enlaces.enlaceProfundo(para: url, calidad: calidad)
+                XCTAssertEqual(profundo.scheme, "descargador")
+                XCTAssertEqual(Enlaces.peticion(desde: profundo), PeticionDescarga(url: url, calidad: calidad), profundo.absoluteString)
+            }
+        }
+    }
+
     func test_peticionConCalidadDesconocida() {
         let p = peticion("descargador://download?url=https://a.com/v&calidad=4k")
         XCTAssertEqual(p?.url.absoluteString, "https://a.com/v")

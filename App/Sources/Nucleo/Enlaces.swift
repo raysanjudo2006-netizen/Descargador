@@ -100,6 +100,19 @@ enum Enlaces {
         return PeticionDescarga(url: url, calidad: calidad)
     }
 
+    /// Construye `descargador://download?url=…[&calidad=…]` con la URL interna codificada
+    /// por completo (así sus propios `&` y `#` llegan intactos). Lo usan la Share Extension y Atajos.
+    static func enlaceProfundo(para url: URL, calidad: Calidad? = nil) -> URL {
+        let permitidos = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        let codificada = url.absoluteString.addingPercentEncoding(withAllowedCharacters: permitidos) ?? ""
+        var texto = "\(esquema)://download?url=\(codificada)"
+        if let calidad {
+            texto += "&calidad=\(calidad.rawValue)"
+        }
+        // Solo contiene caracteres ASCII seguros, así que siempre es una URL válida.
+        return URL(string: texto) ?? URL(fileURLWithPath: "/")
+    }
+
     /// Busca `calidad=…` en una lista de parámetros "a=1&b=2".
     private static func calidadEn(parametros: Substring) -> Calidad? {
         for parametro in parametros.split(separator: "&") {

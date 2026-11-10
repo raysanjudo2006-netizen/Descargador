@@ -35,6 +35,7 @@ final class MotorPython: AnalizadorVideo {
             "url": url.absoluteString,
             "permitir_archivos": permitirArchivos,
             "cache": Self.carpetaCache.path,
+            "cookies": Self.rutaCookies,
         ])
     }
 
@@ -53,6 +54,7 @@ final class MotorPython: AnalizadorVideo {
             "carpeta": carpeta.path,
             "cache": Self.carpetaCache.path,
             "permitir_archivos": permitirArchivos,
+            "cookies": Self.rutaCookies,
         ], eventos: ManejadorEventos(alProgreso: alProgreso, cancelado: cancelado))
     }
 
@@ -65,6 +67,11 @@ final class MotorPython: AnalizadorVideo {
     /// Lee la versión de yt-dlp (y la de yt-dlp-ejs que exige) de un zipapp o wheel descargado.
     func inspeccionarPaquete(_ archivo: URL) async throws -> PaqueteYtDlp {
         try await llamar("inspeccionar_paquete", ["ruta": archivo.path])
+    }
+
+    /// cookies.txt importado en Ajustes ("" si no hay: Python lo ignora).
+    static var rutaCookies: String {
+        Cookies.importadas ? Cookies.archivo.path : ""
     }
 
     /// Caché de yt-dlp (firmas de YouTube, etc.).

@@ -13,6 +13,7 @@ final class GestorDescargas: ObservableObject {
 
     private let motor: MotorDescargas
     private let registro: Registro
+    private let historial: HistorialStore?
     private let segundoPlano: SegundoPlano
     private let carpetaTemporal: URL
     private let permitirArchivos: Bool
@@ -25,11 +26,13 @@ final class GestorDescargas: ObservableObject {
 
     init(motor: MotorDescargas = MotorPython.compartido,
          registro: Registro = .compartido,
+         historial: HistorialStore? = nil,
          carpetaTemporal: URL = Guardado.carpetaTemporal,
          permitirArchivos: Bool = false,
          pedirPermisos: Bool = true) {
         self.motor = motor
         self.registro = registro
+        self.historial = historial
         self.segundoPlano = SegundoPlano(registro: registro)
         self.carpetaTemporal = carpetaTemporal
         self.permitirArchivos = permitirArchivos
@@ -116,6 +119,7 @@ final class GestorDescargas: ObservableObject {
             fase = .terminada(final)
             registro.info("Terminada: \(final.archivo.lastPathComponent)\(final.enFotos ? " (también en Fotos)" : "")",
                           categoria: "descarga")
+            await historial?.agregar(final, plataforma: Plataforma.detectar(url), calidad: opcion.tipo, enlace: url)
             if UIApplication.shared.applicationState != .active {
                 Notificaciones.enviar(titulo: "Descarga terminada", cuerpo: final.titulo)
             }

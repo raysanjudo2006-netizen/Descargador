@@ -1,22 +1,35 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// Ajustes de la app: descargas, apariencia, motor de descarga y datos de la compilación.
+/// Ajustes de la app: descargas, cookies, motor de descarga, apariencia y datos de la compilación.
 struct AjustesView: View {
     @EnvironmentObject private var gestor: GestorDescargas
+    @EnvironmentObject private var historial: HistorialStore
     @StateObject private var actualizador = ActualizadorYtDlp()
     @AppStorage("apariencia") private var apariencia: Apariencia = .sistema
     @AppStorage("guardarEnFotos") private var guardarEnFotos = true
     @AppStorage("mantenerActivo") private var mantenerActivo = false
+    /// "" = preguntar; si no, el rawValue de Calidad.
+    @AppStorage("calidadPredeterminada") private var calidadPredeterminada = ""
     @State private var copiado = false
     @State private var versiones: VersionesMotor?
     @State private var errorMotor: String?
     @State private var espacioUsado: Int64?
     @State private var confirmarVaciado = false
+    @State private var importandoCookies = false
+    @State private var cookiesImportadas = Cookies.importadas
+    @State private var mensajeCookies: String?
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
+                    Picker("Calidad para Compartir y Atajos", selection: $calidadPredeterminada) {
+                        Text("Preguntar").tag("")
+                        ForEach(Calidad.allCases) { calidad in
+                            Text(calidad.titulo).tag(calidad.rawValue)
+                        }
+                    }
                     Toggle("Guardar videos en Fotos", isOn: $guardarEnFotos)
                     Toggle("Mantener activo en segundo plano", isOn: $mantenerActivo)
                         .accessibilityIdentifier("interruptorMantenerActivo")
@@ -29,15 +42,17 @@ struct AjustesView: View {
                 } header: {
                     Text("Descargas")
                 } footer: {
-                    Text("«Mantener activo» reproduce silencio mientras descarga para que iOS no pause la app al salir de ella; gasta algo más de batería. Vaciar no borra lo guardado en Fotos.")
+                    Text("Con una calidad elegida, lo que llega por Compartir o Atajos se descarga solo (si no existe, la más cercana por debajo). «Mantener activo» reproduce silencio mientras descarga para que iOS no pause la app; gasta algo más de batería. Vaciar no borra lo guardado en Fotos.")
                 }
                 .confirmationDialog("¿Borrar las descargas guardadas en la app?", isPresented: $confirmarVaciado,
                                     titleVisibility: .visible) {
                     Button("Vaciar descargas", role: .destructive) {
                         Guardado.vaciar()
+                        historial.vaciar()
                         Task { await calcularEspacio() }
                     }
                 }
+
 
                 Section {
                     LabeledContent("yt-dlp", value: textoYtDlp)
@@ -58,6 +73,28 @@ struct AjustesView: View {
                     } else {
                         Text("Si una web deja de funcionar, normalmente basta con actualizar yt-dlp. Se descarga de GitHub (unos 3 MB) y se usa al volver a abrir la app.")
                     }
+                }
+
+                Section {
+                    LabeledContent("Cookies", value: cookiesImportadas ? "Importadas" : "Ninguna")
+                    Button(cookiesImportadas ? "Reemplazar cookies.txt" : "Importar cookies.txt") {
+                        importandoCookies = true
+                    }
+                    if cookiesImportadas {
+                        Button("Borrar cookies", role: .destructive) {
+                            Cookies.borrar()
+                            cookiesImportadas = false
+                            mensajeCookies = "Cookies borradas."
+                        }
+                    }
+                } header: {
+                    Text("Cookies (opcional)")
+                } footer: {
+                    Text(mensajeCookies ?? "Solo hacen falta si un video pide tu sesión: privado, con edad o «confirma que no eres un robot». Exporta cookies.txt desde el navegador del PC y pásalo al iPhone. Son como tu contraseña: no las compartas.")
+                }
+                .fileImporter(isPresented: $importandoCookies,
+                              allowedContentTypes: [.plainText, .text, .data]) { resultado in
+                    importarCookies(resultado)
                 }
 
                 Section("Apariencia") {
@@ -94,6 +131,16 @@ struct AjustesView: View {
                 await calcularEspacio()
                 await cargarVersiones()
             }
+        }
+    }
+
+    private func importarCookies(_ resultado: Result<URL, Error>) {
+        do {
+            let cantidad = try Cookies.importar(desde: resultado.get())
+            cookiesImportadas = true
+            mensajeCookies = "Importadas \(cantidad) cookies. Se usarán en los próximos análisis."
+        } catch {
+            mensajeCookies = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
     }
 

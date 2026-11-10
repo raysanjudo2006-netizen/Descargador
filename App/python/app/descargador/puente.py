@@ -201,7 +201,7 @@ def _miniatura(info: dict):
 
 def _opciones_comunes(peticion: dict, registro: _RegistroYtDlp) -> dict:
     """Opciones de YoutubeDL compartidas por info y descargar."""
-    return {
+    opciones = {
         "logger": registro,
         "quiet": True,
         "noprogress": True,
@@ -212,6 +212,11 @@ def _opciones_comunes(peticion: dict, registro: _RegistroYtDlp) -> dict:
         # Solo para los tests (archivos locales); nunca desde la interfaz.
         "enable_file_urls": bool(peticion.get("permitir_archivos")),
     }
+    # Cookies del usuario (cookies.txt importado en Ajustes) para videos que piden su sesión.
+    cookies = peticion.get("cookies")
+    if cookies and os.path.isfile(cookies):
+        opciones["cookiefile"] = cookies
+    return opciones
 
 
 def _primera_entrada(datos: dict, registro: _RegistroYtDlp) -> dict:

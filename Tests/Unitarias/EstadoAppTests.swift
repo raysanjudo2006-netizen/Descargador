@@ -34,6 +34,43 @@ final class EstadoAppTests: XCTestCase {
         return (EstadoApp(pestanaInicial: .ajustes, registro: registro, analizador: analizador), registro)
     }
 
+    func test_calidadPredeterminadaSeAplicaSoloSiElEnlaceNoTraeCalidad() throws {
+        let archivo = FileManager.default.temporaryDirectory.appendingPathComponent("estado-\(UUID().uuidString).jsonl")
+        let estado = EstadoApp(registro: Registro(archivo: archivo),
+                               analizador: AnalizadorFalso { url in infoDePrueba(url.absoluteString) },
+                               calidadPorDefecto: { .p480 }, buzon: BuzonEnlaces())
+        estado.abrir(enlaceProfundo: try XCTUnwrap(URL(string: "descargador://download?url=https://youtu.be/abc")))
+        XCTAssertEqual(estado.calidadSolicitada, .p480)
+        estado.abrir(enlaceProfundo: try XCTUnwrap(URL(string: "descargador://download?url=https://youtu.be/xyz&calidad=audio")))
+        XCTAssertEqual(estado.calidadSolicitada, .audio, "La calidad del enlace manda sobre la predeterminada")
+    }
+
+    func test_buzonPendienteAlCrearEstado() throws {
+        let buzon = BuzonEnlaces()
+        let enlace = Enlaces.enlaceProfundo(para: try XCTUnwrap(URL(string: "https://x.com/u/status/7")), calidad: .p360)
+        buzon.depositar(enlace)  // llega antes de que exista la interfaz (arranque en frío)
+        let archivo = FileManager.default.temporaryDirectory.appendingPathComponent("estado-\(UUID().uuidString).jsonl")
+        let estado = EstadoApp(registro: Registro(archivo: archivo),
+                               analizador: AnalizadorFalso { url in infoDePrueba(url.absoluteString) },
+                               calidadPorDefecto: { nil }, buzon: buzon)
+        XCTAssertEqual(estado.textoEnlace, "https://x.com/u/status/7")
+        XCTAssertEqual(estado.calidadSolicitada, .p360)
+
+        buzon.depositar(Enlaces.enlaceProfundo(para: try XCTUnwrap(URL(string: "https://youtu.be/otro"))))
+        XCTAssertEqual(estado.textoEnlace, "https://youtu.be/otro", "Con la interfaz abierta llega al momento")
+    }
+
+    func test_accionDeAtajosDejaElEnlaceEnElBuzon() async throws {
+        var recibido: URL?
+        BuzonEnlaces.compartido.conectar { recibido = $0 }
+        var accion = DescargarVideoIntent()
+        accion.enlace = "Mira esto https://vm.tiktok.com/ZMabc/ #fyp"
+        accion.calidad = .audio
+        _ = try await accion.perform()
+        let peticion = try XCTUnwrap(recibido.flatMap(Enlaces.peticion(desde:)))
+        XCTAssertEqual(peticion, PeticionDescarga(url: URL(string: "https://vm.tiktok.com/ZMabc/")!, calidad: .audio))
+    }
+
     func test_analisisCorrectoPublicaInfo() async {
         let (estado, _) = nuevoEstado()
         estado.usarTextoPegado("https://x.com/u/status/1")

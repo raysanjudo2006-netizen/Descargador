@@ -87,8 +87,9 @@ struct DescargarView: View {
         }
         .onChange(of: estado.analisis) { nuevo in
             // Si Atajos o descargador://…&calidad=… pidió una calidad, se descarga sola.
+            // Si esa calidad no existe para este video, se usa la más cercana por debajo.
             if case .listo(let info) = nuevo, let calidad = estado.calidadSolicitada,
-               let opcion = info.opcion(calidad), opcion.disponible {
+               let opcion = info.opcionMasCercana(a: calidad) {
                 descargar(opcion, de: info)
                 // Solo una vez: reintentar el análisis no debe repetir la descarga.
                 estado.calidadSolicitada = nil

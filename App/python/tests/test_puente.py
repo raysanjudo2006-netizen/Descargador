@@ -65,6 +65,16 @@ class TestPuente(unittest.TestCase):
 
 
 class TestPuenteSinYtDlp(unittest.TestCase):
+    def test_cookiesSoloSiExisteElArchivo(self):
+        registro = puente._RegistroYtDlp(puente.Emisor(0, 0))
+        with tempfile.TemporaryDirectory() as tmp:
+            cookies = pathlib.Path(tmp) / "cookies.txt"
+            cookies.write_text("# Netscape HTTP Cookie File", encoding="utf-8")
+            con = puente._opciones_comunes({"cookies": str(cookies)}, registro)
+            sin = puente._opciones_comunes({"cookies": str(pathlib.Path(tmp) / "no-existe.txt")}, registro)
+        self.assertEqual(con["cookiefile"], str(cookies))
+        self.assertNotIn("cookiefile", sin)
+
     def test_peticionInvalidaDevuelveErrorJson(self):
         r = json.loads(puente.info("esto no es json", 0, 0))
         self.assertFalse(r["ok"])

@@ -48,7 +48,13 @@ final class RecorridoUITests: XCTestCase {
     @discardableResult
     private func esperarTexto(_ elemento: XCUIElement, contiene texto: String, segundos: TimeInterval) -> Bool {
         let limite = Date().addingTimeInterval(segundos)
+        var desplazamientos = 0
         while Date() < limite {
+            // Si la fila está fuera de pantalla (listas perezosas), se desplaza un poco.
+            if !elemento.exists, desplazamientos < 3 {
+                XCUIApplication().swipeUp()
+                desplazamientos += 1
+            }
             if elemento.exists {
                 var textos = [elemento.label, (elemento.value as? String) ?? ""]
                 textos += elemento.staticTexts.allElementsBoundByIndex.map(\.label)

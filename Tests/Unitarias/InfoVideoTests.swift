@@ -32,6 +32,22 @@ final class InfoVideoTests: XCTestCase {
         XCTAssertNil(info.opcion(.p720))
     }
 
+    func test_opcionMasCercana() {
+        func opcion(_ calidad: String, _ disponible: Bool) -> OpcionCalidad {
+            OpcionCalidad(calidad: calidad, disponible: disponible, resolucion: nil, video: "v", audio: nil,
+                          unir: false, bytes: nil, aproximado: true, protocolo: "https", extraerAudio: false)
+        }
+        let info = InfoVideo(id: nil, titulo: "t", autor: nil, duracion: nil, miniatura: nil, extractor: nil,
+                             urlPagina: nil,
+                             opciones: [opcion("mejor", true), opcion("1080", false), opcion("720", false),
+                                        opcion("480", true), opcion("360", true), opcion("audio", false)],
+                             avisos: [])
+        XCTAssertEqual(info.opcionMasCercana(a: .p480)?.calidad, "480", "Si existe, la exacta")
+        XCTAssertEqual(info.opcionMasCercana(a: .p1080)?.calidad, "480", "Si no, la más cercana por debajo")
+        XCTAssertEqual(info.opcionMasCercana(a: .mejor)?.calidad, "mejor")
+        XCTAssertNil(info.opcionMasCercana(a: .audio), "Sin audio no hay alternativa")
+    }
+
     func test_duracionCorta() throws {
         let json = #"{"ok":true,"datos":{"titulo":"t","duracion":225,"opciones":[],"avisos":[]}}"#
         let info: InfoVideo = try MotorPython.decodificar(Data(json.utf8))

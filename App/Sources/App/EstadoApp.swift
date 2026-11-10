@@ -70,13 +70,26 @@ final class EstadoApp: ObservableObject {
 
     private let registro: Registro
     private let analizador: AnalizadorVideo
+    private let calidadPorDefecto: () -> Calidad?
     private var tareaAnalisis: Task<Void, Never>?
 
+    /// Calidad elegida en Ajustes para lo que llega por Compartir/Atajos (nil = preguntar).
+    nonisolated static func calidadPredeterminadaGuardada() -> Calidad? {
+        UserDefaults.standard.string(forKey: "calidadPredeterminada").flatMap(Calidad.init(rawValue:))
+    }
+
     init(pestanaInicial: Pestana = .descargar, registro: Registro = .compartido,
-         analizador: AnalizadorVideo = MotorPython.compartido) {
+         analizador: AnalizadorVideo = MotorPython.compartido,
+         calidadPorDefecto: @escaping () -> Calidad? = EstadoApp.calidadPredeterminadaGuardada,
+         buzon: BuzonEnlaces = .compartido) {
         self.pestana = pestanaInicial
         self.registro = registro
         self.analizador = analizador
+        self.calidadPorDefecto = calidadPorDefecto
+        // Enlaces de Atajos: también los que llegaron antes de abrir la interfaz.
+        buzon.conectar { [weak self] enlace in
+            self?.abrir(enlaceProfundo: enlace)
+        }
     }
 
     /// Vuelve a analizar el enlace actual (botón "Reintentar").
@@ -170,6 +183,7 @@ final class EstadoApp: ObservableObject {
         pestana = .descargar
         aceptar(peticion.url)
         // Después de aceptar: cambiar el texto borra la calidad anterior.
-        calidadSolicitada = peticion.calidad
+        // Sin calidad en el enlace, se usa la predeterminada de Ajustes (si hay).
+        calidadSolicitada = peticion.calidad ?? calidadPorDefecto()
     }
 }

@@ -37,6 +37,8 @@ targets:
     dependencies:
       - framework: Python.xcframework
         embed: true
+      # Descargador en la hoja de Compartir (se incrusta en PlugIns/).
+      - target: CompartirExtension
     # Mete la biblioteca estándar, yt-dlp y App/python dentro de la app (ver el script).
     postBuildScripts:
       - name: Instalar Python
@@ -82,6 +84,35 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: App/Sources/Python/Descargador-Bridging-Header.h
         # Las cabeceras de Python usan #include "…" dentro del framework: no es un error.
         CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER: NO
+
+  # Extensión de Compartir: toma el enlace y abre la app con descargador://download?url=…
+  CompartirExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+      # Misma lógica de enlaces que la app (compilada también aquí).
+      - path: App/Sources/Nucleo/Enlaces.swift
+      - path: App/Sources/Nucleo/Calidad.swift
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Descargador
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ControladorCompartir
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.personal.descargador.compartir
+        PRODUCT_NAME: DescargadorCompartir
+        # Para poder abrir la app contenedora (UIApplication.open). La app no va a la App Store.
+        APPLICATION_EXTENSION_API_ONLY: NO
 
   # Tests unitarios de la lógica (se ejecutan en el simulador de GitHub Actions).
   DescargadorTests:
