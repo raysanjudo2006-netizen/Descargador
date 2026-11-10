@@ -91,7 +91,9 @@ final class HistorialStore: ObservableObject {
         let bytes = (try? resultado.archivo.resourceValues(forKeys: [.fileSizeKey]).fileSize).map { Int64($0) } ?? 0
         let entrada = EntradaHistorial(id: id, titulo: resultado.titulo, plataforma: plataforma,
                                        nombreArchivo: resultado.archivo.lastPathComponent,
-                                       nombreMiniatura: nombreMiniatura, bytes: bytes, fecha: Date(),
+                                       nombreMiniatura: nombreMiniatura, bytes: bytes,
+                                       // Al segundo: es la precisión con que se guarda (ISO 8601).
+                                       fecha: Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded(.down)),
                                        esAudio: resultado.esAudio, calidad: calidad?.rawValue,
                                        enlace: enlace.absoluteString)
         // Si una entrada vieja apuntaba a un archivo ya borrado con el mismo nombre, ese nombre
