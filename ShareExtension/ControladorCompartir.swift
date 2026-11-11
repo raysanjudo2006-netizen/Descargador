@@ -45,9 +45,12 @@ final class ControladorCompartir: UIViewController {
             extensionContext?.completeRequest(returningItems: nil)
             return
         }
+        // El enlace web (no el descargador://): es lo que el aviso del portapapeles de la app reconoce.
+        UIPasteboard.general.string = enlace.absoluteString
         abrirDescargador(Enlaces.enlaceProfundo(para: enlace))
+        etiqueta.text = "Abriendo Descargador…\nSi no se abre, ábrelo tú: el enlace ya está copiado."
         // Un instante para que iOS cambie a la app antes de cerrar la hoja.
-        try? await Task.sleep(nanoseconds: 400_000_000)
+        try? await Task.sleep(nanoseconds: 700_000_000)
         extensionContext?.completeRequest(returningItems: nil)
     }
 
@@ -89,10 +92,24 @@ final class ControladorCompartir: UIViewController {
     }
 
     /// Las extensiones no pueden llamar a UIApplication.open (Xcode exige compilarlas solo con
-    /// API de extensiones). Se busca en la cadena de respondedores quien responda a
-    /// openURL:options:completionHandler: (la aplicación) y se le llama a través del runtime de
-    /// Objective-C. Es lo que funciona en iOS 18+; en versiones anteriores, openURL: como respaldo.
+    /// API de extensiones). Se busca en la cadena de respondedores a la aplicación y se le llama
+    /// a través del runtime de Objective-C:
+    /// - iOS 18+: openURL:options:completionHandler: (openURL: ya no hace nada).
+    /// - iOS 17 y anteriores: openURL:. El método nuevo existe pero no abre nada desde una
+    ///   extensión, así que hay que usar el antiguo primero (era el fallo en iOS 17).
+    /// Además el enlace queda copiado: si iOS no abre la app, al abrirla a mano lo ofrece.
     private func abrirDescargador(_ enlace: URL) {
+        if #available(iOS 18.0, *) {
+            if abrirConSelectorNuevo(enlace) { return }
+            _ = abrirConSelectorAntiguo(enlace)
+        } else {
+            if abrirConSelectorAntiguo(enlace) { return }
+            _ = abrirConSelectorNuevo(enlace)
+        }
+    }
+
+    @discardableResult
+    private func abrirConSelectorNuevo(_ enlace: URL) -> Bool {
         let selector = NSSelectorFromString("openURL:options:completionHandler:")
         var respondedor: UIResponder? = self
         while let actual = respondedor {
@@ -100,22 +117,26 @@ final class ControladorCompartir: UIViewController {
                 typealias Abrir = @convention(c) (AnyObject, Selector, NSURL, NSDictionary, AnyObject?) -> Void
                 let abrir = unsafeBitCast(implementacion, to: Abrir.self)
                 abrir(actual, selector, enlace as NSURL, NSDictionary(), nil)
-                return
+                return true
             }
             respondedor = actual.next
         }
-        abrirConSelectorAntiguo(enlace)
+        return false
     }
 
-    private func abrirConSelectorAntiguo(_ enlace: URL) {
+    /// true si iOS aceptó abrir el enlace (openURL: devuelve un BOOL).
+    @discardableResult
+    private func abrirConSelectorAntiguo(_ enlace: URL) -> Bool {
         let selector = sel_registerName("openURL:")
         var respondedor: UIResponder? = self
         while let actual = respondedor {
-            if actual.responds(to: selector) {
-                actual.perform(selector, with: enlace)
-                return
+            if actual.responds(to: selector), let implementacion = actual.method(for: selector) {
+                typealias Abrir = @convention(c) (AnyObject, Selector, NSURL) -> Bool
+                let abrir = unsafeBitCast(implementacion, to: Abrir.self)
+                return abrir(actual, selector, enlace as NSURL)
             }
             respondedor = actual.next
         }
+        return false
     }
 }

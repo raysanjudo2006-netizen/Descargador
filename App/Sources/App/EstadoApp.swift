@@ -117,7 +117,7 @@ final class EstadoApp: ObservableObject {
                 guard let self, !Task.isCancelled, self.enlaceAnalizado == url else { return }
                 self.analisis = .listo(info)
                 let disponibles = info.opciones.filter(\.disponible).count
-                self.registro.info("Analizado: \(info.titulo) (\(disponibles) calidades disponibles)", categoria: "ui")
+                self.registro.info("Analizado: \(info.titulo) (\(disponibles) calidades disponibles, duración \(info.duracionTexto ?? "desconocida") = \(info.duracion.map { String(Int($0)) } ?? "?") s)", categoria: "ui")
             } catch {
                 guard let self, !Task.isCancelled, self.enlaceAnalizado == url else { return }
                 let mensaje = (error as? ErrorMotor)?.mensajeUsuario

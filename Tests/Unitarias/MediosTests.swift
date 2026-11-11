@@ -100,6 +100,47 @@ final class MediosTests: XCTestCase {
         XCTAssertLessThan(segundos, 1.5, "El audio sobrante debe recortarse")
     }
 
+    /// YouTube: el video sin audio dice durar el doble. El resultado debe durar lo del audio.
+    func test_unirConVideoMasLargoQueElAudio() async throws {
+        let video = carpeta.appendingPathComponent("video.mp4")
+        let audio = carpeta.appendingPathComponent("audio.m4a")
+        let salida = carpeta.appendingPathComponent("final.mp4")
+        try await GeneradorMedios.video(segundos: 4, en: video)
+        try GeneradorMedios.audio(segundos: 2, en: audio)
+        try await Medios.unir(video: video, audio: audio, destino: salida)
+        let segundos = try await duracion(salida)
+        XCTAssertLessThan(segundos, 2.5, "No debe durar más que el audio (antes salía el doble)")
+        XCTAssertGreaterThan(segundos, 1.5)
+    }
+
+    func test_unirNoPasaDeLaDuracionDeLaPlataforma() async throws {
+        let video = carpeta.appendingPathComponent("video.mp4")
+        let audio = carpeta.appendingPathComponent("audio.m4a")
+        let salida = carpeta.appendingPathComponent("final.mp4")
+        try await GeneradorMedios.video(segundos: 4, en: video)
+        try GeneradorMedios.audio(segundos: 4, en: audio)
+        try await Medios.unir(video: video, audio: audio, destino: salida, duracionEsperada: 2)
+        let segundos = try await duracion(salida)
+        XCTAssertLessThan(segundos, 3.2, "Máximo la duración de la plataforma + 1 s")
+    }
+
+    func test_prepararVideoRecortaSiDiceDurarDeMas() async throws {
+        let video = carpeta.appendingPathComponent("video.mp4")
+        let salida = carpeta.appendingPathComponent("final.mp4")
+        try await GeneradorMedios.video(segundos: 4, en: video)
+        try await Medios.prepararVideo(video, destino: salida, duracionEsperada: 1)
+        let segundos = try await duracion(salida)
+        XCTAssertLessThan(segundos, 2.5)
+    }
+
+    func test_duracionFinal() {
+        let s = { (x: Double) in CMTime(seconds: x, preferredTimescale: 600) }
+        XCTAssertEqual(Medios.duracionFinal([s(426), s(213)], esperada: nil).seconds, 213, accuracy: 0.01)
+        XCTAssertEqual(Medios.duracionFinal([s(426), s(426)], esperada: 213).seconds, 214, accuracy: 0.01)
+        XCTAssertEqual(Medios.duracionFinal([s(213), s(213)], esperada: 213).seconds, 213, accuracy: 0.01)
+        XCTAssertEqual(Medios.duracionFinal([.invalid, s(5)], esperada: 0).seconds, 5, accuracy: 0.01)
+    }
+
     func test_unirSinAudioDaErrorClaro() async throws {
         let video = carpeta.appendingPathComponent("video.mp4")
         try await GeneradorMedios.video(segundos: 1, en: video)

@@ -115,7 +115,8 @@ final class GestorDescargas: ObservableObject {
                 },
                 cancelado: { cancelacion.activa })
             try comprobarCancelacion()
-            let final = try await procesar(resultado, opcion: opcion, titulo: info.titulo, guardarEnFotos: guardarEnFotos)
+            let final = try await procesar(resultado, opcion: opcion, titulo: info.titulo,
+                                         duracion: info.duracion, guardarEnFotos: guardarEnFotos)
             try? FileManager.default.removeItem(at: carpeta)
             fase = .terminada(final)
             registro.info("Terminada: \(final.archivo.lastPathComponent)\(final.enFotos ? " (también en Fotos)" : "")",
@@ -142,7 +143,7 @@ final class GestorDescargas: ObservableObject {
 
     /// Convierte lo descargado en el archivo final y lo guarda.
     private func procesar(_ resultado: ResultadoDescargaPython, opcion: OpcionCalidad, titulo: String,
-                          guardarEnFotos: Bool) async throws -> ResultadoFinal {
+                          duracion: Double?, guardarEnFotos: Bool) async throws -> ResultadoFinal {
         let video = resultado.archivos["video"].map { URL(fileURLWithPath: $0) }
         let audio = resultado.archivos["audio"].map { URL(fileURLWithPath: $0) }
         let temporal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -163,9 +164,13 @@ final class GestorDescargas: ObservableObject {
         let salida = temporal.appendingPathExtension("mp4")
         guard let video else { throw ErrorMedios.sinPistaDeVideo }
         if opcion.unir, let audio {
-            try await paso("Uniendo audio y video") { try await Medios.unir(video: video, audio: audio, destino: salida, progreso: $0) }
+            try await paso("Uniendo audio y video") {
+                try await Medios.unir(video: video, audio: audio, destino: salida, duracionEsperada: duracion, progreso: $0)
+            }
         } else {
-            try await paso("Preparando el video") { try await Medios.prepararVideo(video, destino: salida, progreso: $0) }
+            try await paso("Preparando el video") {
+                try await Medios.prepararVideo(video, destino: salida, duracionEsperada: duracion, progreso: $0)
+            }
         }
         let final = try Guardado.moverADescargas(salida, titulo: titulo)
 

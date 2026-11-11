@@ -32,6 +32,9 @@ struct DescargadorApp: App {
                 .environmentObject(Registro.compartido)
                 .preferredColorScheme(apariencia.esquema)
                 .onOpenURL { url in
+                    // La extensión de Compartir también copia el enlace (por si iOS no abre la
+                    // app): como ya llegó por aquí, que el aviso del portapapeles no lo repita.
+                    Portapapeles.marcarVisto(UIPasteboard.general.changeCount)
                     estado.abrir(enlaceProfundo: url)
                 }
         }

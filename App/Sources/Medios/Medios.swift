@@ -21,8 +21,26 @@ enum ErrorMedios: LocalizedError, Equatable {
 /// Unión y conversión de medios con AVFoundation, siempre sin recodificar el video
 /// (passthrough): es rápido y no pierde calidad. No se usa ffmpeg.
 enum Medios {
-    /// Une un video (sin audio) y un audio en un MP4. Si el audio es más largo, se recorta.
-    static func unir(video: URL, audio: URL, destino: URL,
+    /// Duración final: la más corta de las pistas y, si se conoce, nunca más de lo que dura el
+    /// video en la plataforma (+1 s de margen).
+    ///
+    /// YouTube entrega a veces el video sin audio con una cabecera que dice el DOBLE de lo que
+    /// dura: usar esa cifra dejaba archivos del doble de largo (la segunda mitad congelada).
+    static func duracionFinal(_ pistas: [CMTime], esperada: Double?) -> CMTime {
+        let validas = pistas.filter { $0.isValid && $0.seconds > 0 }
+        guard var duracion = validas.first else { return .zero }
+        for pista in validas.dropFirst() {
+            duracion = CMTimeMinimum(duracion, pista)
+        }
+        if let esperada, esperada > 0 {
+            duracion = CMTimeMinimum(duracion, CMTime(seconds: esperada + 1, preferredTimescale: 600))
+        }
+        return duracion
+    }
+
+    /// Une un video (sin audio) y un audio en un MP4, con la duración real del video
+    /// (ver `duracionFinal`). `duracionEsperada`: la que dio yt-dlp al analizar.
+    static func unir(video: URL, audio: URL, destino: URL, duracionEsperada: Double? = nil,
                      progreso: @escaping (Double) -> Void = { _ in }) async throws {
         let activoVideo = AVURLAsset(url: video)
         let activoAudio = AVURLAsset(url: audio)
@@ -32,8 +50,10 @@ enum Medios {
         guard let pistaAudio = try await activoAudio.loadTracks(withMediaType: .audio).first else {
             throw ErrorMedios.sinPistaDeAudio
         }
-        let duracionVideo = try await activoVideo.load(.duration)
-        let duracionAudio = try await activoAudio.load(.duration)
+        // El tramo de cada pista (lo que de verdad tiene), no la duración de la cabecera.
+        let tramoVideo = try await pistaVideo.load(.timeRange)
+        let tramoAudio = try await pistaAudio.load(.timeRange)
+        let duracion = duracionFinal([tramoVideo.duration, tramoAudio.duration], esperada: duracionEsperada)
 
         let composicion = AVMutableComposition()
         guard let video = composicion.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
@@ -41,10 +61,9 @@ enum Medios {
         else {
             throw ErrorMedios.exportacion("no se pudo crear la composición")
         }
-        try video.insertTimeRange(CMTimeRange(start: .zero, duration: duracionVideo), of: pistaVideo, at: .zero)
+        try video.insertTimeRange(CMTimeRange(start: tramoVideo.start, duration: duracion), of: pistaVideo, at: .zero)
         video.preferredTransform = try await pistaVideo.load(.preferredTransform)
-        let duracion = CMTimeMinimum(duracionVideo, duracionAudio)
-        try audio.insertTimeRange(CMTimeRange(start: .zero, duration: duracion), of: pistaAudio, at: .zero)
+        try audio.insertTimeRange(CMTimeRange(start: tramoAudio.start, duration: duracion), of: pistaAudio, at: .zero)
 
         try await exportar(composicion, preset: AVAssetExportPresetPassthrough, tipo: .mp4,
                            destino: destino, progreso: progreso)
@@ -52,14 +71,25 @@ enum Medios {
 
     /// Reempaqueta un video ya completo (con su audio) en un MP4 normal que Fotos acepta
     /// (p. ej. un MP4 fragmentado de DASH). Sin recodificar.
-    static func prepararVideo(_ origen: URL, destino: URL,
+    /// Si el archivo dice durar más de lo real (ver `duracionFinal`), se recorta.
+    static func prepararVideo(_ origen: URL, destino: URL, duracionEsperada: Double? = nil,
                               progreso: @escaping (Double) -> Void = { _ in }) async throws {
         let activo = AVURLAsset(url: origen)
-        guard try await !activo.loadTracks(withMediaType: .video).isEmpty else {
+        let pistasVideo = try await activo.loadTracks(withMediaType: .video)
+        guard !pistasVideo.isEmpty else {
             throw ErrorMedios.formatoNoCompatible
         }
+        let pistasAudio = try await activo.loadTracks(withMediaType: .audio)
+        var tramos: [CMTime] = []
+        for pista in pistasVideo + pistasAudio {
+            tramos.append(try await pista.load(.timeRange).duration)
+        }
+        let duracion = duracionFinal(tramos, esperada: duracionEsperada)
+        let total = try await activo.load(.duration)
+        let recortar = CMTimeCompare(duracion, .zero) > 0 && CMTimeCompare(duracion, total) < 0
+        let recorte = recortar ? CMTimeRange(start: .zero, duration: duracion) : nil
         try await exportar(activo, preset: AVAssetExportPresetPassthrough, tipo: .mp4,
-                           destino: destino, progreso: progreso)
+                           destino: destino, tramo: recorte, progreso: progreso)
     }
 
     /// Extrae la pista de audio de un video a M4A (AAC).
@@ -92,6 +122,7 @@ enum Medios {
     // MARK: - Exportación
 
     private static func exportar(_ activo: AVAsset, preset: String, tipo: AVFileType, destino: URL,
+                                 tramo: CMTimeRange? = nil,
                                  progreso: @escaping (Double) -> Void = { _ in }) async throws {
         try? FileManager.default.removeItem(at: destino)
         guard let sesion = AVAssetExportSession(asset: activo, presetName: preset) else {
@@ -103,6 +134,9 @@ enum Medios {
         sesion.outputURL = destino
         sesion.outputFileType = tipo
         sesion.shouldOptimizeForNetworkUse = true
+        if let tramo {
+            sesion.timeRange = tramo
+        }
 
         // Progreso cada 0,2 s mientras exporta.
         let vigilante = Task {
